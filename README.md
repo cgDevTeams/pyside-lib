@@ -1,1 +1,1 @@
-"# pyside-lib" 
+# pyside-lib
