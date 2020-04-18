@@ -29,12 +29,18 @@ from PySideLib.QCdtWidgets import (
     QImageFlowModelItem,
 )
 
+from PySideLib.QCdtUtils import (
+    BatchImageLoader,
+    ImageLoadingCallback,
+)
+
 
 class FlowItem(QImageFlowModelItem):
-    def __init__(self, filePath):
+    def __init__(self, filePath, image=None):
         super(FlowItem, self).__init__()
         self.filePath = filePath
         self.name = os.path.basename(filePath)
+        self.setImage(image)
 
     def __repr__(self):
         return "{}('{}')".format(self.__class__.__name__, self.filePath)
@@ -77,6 +83,7 @@ def main():
 
     proxy = QSortFilterProxyModel()
     proxy.setFilterRole(FlowModel.FileNameRole)
+    proxy.setSortRole(FlowModel.FileNameRole)
     imageFlow.setProxyModel(proxy)
 
     searchFilter = QLineEdit()
@@ -92,12 +99,34 @@ def main():
     window.setCentralWidget(widget)
     window.show()
 
-    for i, filePath in enumerate(glob.glob('C:/tmp/test_images2/*.png')):
-        # image = QImage(filePath).scaled(100 + random.randint(0, 100), 100 + random.randint(0, 100))
-        image = QImage(filePath).scaled(100, 100)
-        item = FlowItem(filePath)
-        item.setImage(image)
+    # 画像を同期読み込み
+    # for i, filePath in enumerate(glob.glob('C:/tmp/test_images2/*.png')):
+    #     image = QImage(filePath).scaled(100, 100)
+    #     item = FlowItem(filePath)
+    #     item.setImage(image)
+    #     imageFlow.appendItem(item)
+
+    # 画像を非同期読み込み
+    loader = BatchImageLoader()
+    loader.addCallback(ImageLoadingCallback.LOADED, lambda img: img.scaled(100, 100))
+    tasks = {}
+
+    def _on_load_image(taskId):
+        filePath = tasks[taskId]
+        image = loader.image(taskId)
+        item = FlowItem(filePath, image)
         imageFlow.appendItem(item)
+
+    def _on_load_complete():
+        proxy.sort(0)
+
+    loader.loaded.connect(_on_load_image)
+    loader.completed.connect(_on_load_complete)
+    for filePath in glob.iglob('C:/tmp/test_images/*.png'):
+        taskId = loader.addFile(filePath)
+        tasks[taskId] = filePath
+
+    loader.loadAsync()
 
     sys.exit(app.exec_())
 
