@@ -297,7 +297,7 @@ class QListModel(QAbstractListModel):
     def reset(self, items):
         # type: (List[TListItem]) -> NoReturn
         self.beginResetModel()
-        self.__items = items
+        self.__items = items.copy()
         self.endResetModel()
 
     def clear(self):
