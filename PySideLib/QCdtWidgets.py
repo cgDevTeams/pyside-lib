@@ -45,7 +45,7 @@ from PySide2.QtGui import (
 
 class QTagWidget(QWidget):
 
-    def __init__(self, parent, items):
+    def __init__(self, parent=None, items=[]):
         super(QTagWidget, self).__init__()
         self.parent = parent
         self.items = items
@@ -60,8 +60,8 @@ class QTagWidget(QWidget):
         self.setLayout(self.mainLayout)
         self.mainLayout.addWidget(self.mainFrame)
 
-        self.hLayout = QHBoxLayout()
-        self.hLayout.setSpacing(4)
+        self.flowLayout = QFlowLayout()
+        self.flowLayout.setSpacing(4)
 
         self.lineEdit = QLineEdit()
         self.lineEdit.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Maximum)
@@ -74,10 +74,10 @@ class QTagWidget(QWidget):
         completer.setModel(model)
         model.setStringList(self.items)
 
-        self.mainFrame.setLayout(self.hLayout)
+        self.mainFrame.setLayout(self.flowLayout)
 
         self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
-        self.hLayout.setContentsMargins(2, 2, 2, 2)
+        self.flowLayout.setContentsMargins(2, 2, 2, 2)
 
         self.refresh()
 
@@ -98,11 +98,11 @@ class QTagWidget(QWidget):
         self.refresh()
 
     def refresh(self):
-        for i in reversed(range(self.hLayout.count())):
-            self.hLayout.itemAt(i).widget().setParent(None)
+        for i in reversed(range(self.flowLayout.count())):
+            self.flowLayout.itemAt(i).widget().setParent(None)
         for tag in self.tags:
             self.add_tag_to_bar(tag)
-        self.hLayout.addWidget(self.lineEdit)
+        self.flowLayout.addWidget(self.lineEdit)
         self.lineEdit.setFocus()
 
         # Accept to add only 5 tags
@@ -137,7 +137,7 @@ class QTagWidget(QWidget):
 
         tag.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
 
-        self.hLayout.addWidget(tag)
+        self.flowLayout.addWidget(tag)
 
     def delete_tag(self, tag_name):
         self.tags.remove(tag_name)
