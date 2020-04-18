@@ -320,10 +320,6 @@ class QListModel(QAbstractListModel):
         # type: (QModelIndex) -> int
         return len(self.__items)
 
-    def data(self, index, role):
-        # type: (QModelIndex, int) -> Any
-        raise NotImplementedError('QListModel.data() must be implemented on derived classes')
-
 
 class QFlowView(QListView):
 
