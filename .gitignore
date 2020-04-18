@@ -1,0 +1,10 @@
+# Ignore Python caches
+*.pyc
+__pycahce__
+
+# Ignore PyTest cache
+.pytest_cache
+
+# Ignore Development Environment
+.venv
+.vscode
