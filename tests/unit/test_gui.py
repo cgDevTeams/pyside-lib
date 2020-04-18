@@ -4,12 +4,16 @@ from PySide2.QtWidgets import (
     QVBoxLayout
 )
 
+
 class TestQTabWidget:
     """
     Group of tests for QTabWidget
     """
-    def test_addWidget(self, base_window, sample_list_str):
+
+    def test_addWidget(self, sample_list_str):
         from PySideLib.QCdtWidgets import QTagWidget
-        tagWidget = QTagWidget(base_window, sample_list_str)
-        base_window.setCentralWidget(tagWidget)
-        # assert hasattr(mainWindow, 'tagWidget')
+        app = QApplication()
+        mainwWindow = QMainWindow()
+        tagWidget = QTagWidget(mainwWindow, sample_list_str)
+        mainwWindow.setCentralWidget(tagWidget)
+        mainwWindow.show()

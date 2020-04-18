@@ -8,16 +8,17 @@ from PySide2.QtWidgets import (
 )
 
 # Set path to parent directory
-sys.path.append(os.path.abspath(os.path.dirname(os.path.abspath(__file__)) + "/../"))
+sys.path.append(os.path.abspath(
+    os.path.dirname(os.path.abspath(__file__)) + "/../"))
 
-@pytest.fixture
-def base_window():
-    """Create Base QMainWindow to test as adding layouts and widgets
-    """
-    app = QApplication()
-    mainWindow = QMainWindow()
-    mainWindow.show()
-    return mainWindow
+# @pytest.fixture
+# def base_window():
+#     """Create Base QMainWindow to test as adding layouts and widgets
+#     """
+#     app = QApplication()
+#     mainWindow = QMainWindow()
+#     mainWindow.show()
+#     return mainWindow
 
 
 @pytest.fixture
