@@ -8,3 +8,4 @@ __pycahce__
 # Ignore Development Environment
 .venv
 .vscode
+.idea
