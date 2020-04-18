@@ -182,7 +182,7 @@ class QPartialMatchCompleter(QCompleter):
 class QFlowLayout(QLayout):
 
     def __init__(self, parent=None, margin=0, spacing=-1):
-        super(FlowLayout, self).__init__(parent)
+        super(QFlowLayout, self).__init__(parent)
 
         if parent is not None:
             self.setMargin(margin)
@@ -225,7 +225,7 @@ class QFlowLayout(QLayout):
         return height
 
     def setGeometry(self, rect):
-        super(FlowLayout, self).setGeometry(rect)
+        super(QFlowLayout, self).setGeometry(rect)
         self.doLayout(rect, False)
 
     def sizeHint(self):
