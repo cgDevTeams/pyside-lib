@@ -4,9 +4,11 @@ import sys
 from functools import partial
 
 from typing import (
-    NewType,
+    TypeVar,
     NoReturn,
+    Any,
     List,
+    Union,
 )
 
 from PySide2.QtCore import (
@@ -17,7 +19,6 @@ from PySide2.QtCore import (
     QStringListModel,
     QAbstractProxyModel,
     QSortFilterProxyModel,
-    QPoint,
 )
 
 from PySide2.QtWidgets import (
@@ -173,14 +174,80 @@ class QPartialMatchCompleter(QCompleter):
         return ""
 
 
-class QImageFlowView(QListView):
+TListItem = TypeVar('TListItem')
+
+
+class QListModel(QAbstractListModel):
 
     def __init__(self, parent):
         # type: (QObject) -> NoReturn
-        super(QImageFlowView, self).__init__(parent)
+        super(QListModel, self).__init__(parent)
+        self.__items = []  # type: List[TListItem]
+
+    def append(self, item):
+        # type: (TListItem) -> NoReturn
+        self.beginInsertRows(QModelIndex(), self.rowCount(), self.rowCount() + 1)
+        self.__items.append(item)
+        self.endInsertRows()
+
+    def extend(self, items):
+        # type: (List[TListItem]) -> NoReturn
+        self.beginInsertRows(QModelIndex(), self.rowCount(), self.rowCount() + len(items))
+        self.__items.extend(items)
+        self.endInsertRows()
+
+    def remove(self, item):
+        # type: (TListItem) -> NoReturn
+        index = self.__items.index(item)
+        self.beginRemoveRows(QModelIndex(), index, index + 1)
+        self.__items.remove(item)
+        self.endRemoveRows()
+
+    def reset(self, items):
+        # type: (List[TListItem]) -> NoReturn
+        self.beginResetModel()
+        self.__items = items
+        self.endResetModel()
+
+    def clear(self):
+        # type: () -> NoReturn
+        self.reset([])
+
+    def item(self, index):
+        # type: (Union[int, QModelIndex]) -> TListItem
+        if isinstance(index, QModelIndex):
+            index = index.row()
+        if isinstance(index, int):
+            return self.__items[index]
+        raise RuntimeError()
+
+    def items(self):
+        # type: () -> List[TListItem]
+        return self.__items
+
+    def rowCount(self, parent=QModelIndex()):
+        # type: (QModelIndex) -> int
+        return len(self.__items)
+
+    def data(self, index, role):
+        # type: (QModelIndex, int) -> Any
+        raise NotImplementedError('QListModel.data() must be implemented on derived classes')
+
+
+class QFlowView(QListView):
+
+    def __init__(self, parent):
+        # type: (QObject) -> NoReturn
+        super(QFlowView, self).__init__(parent)
         self.setWrapping(True)
         self.setResizeMode(QListView.Adjust)
         self.setViewMode(QListView.IconMode)
+
+
+class QFlowDirection(object):
+
+    LeftToRight = QListView.LeftToRight
+    TopToBottom = QListView.TopToBottom
 
 
 class QImageFlowModelItem(object):
@@ -197,83 +264,28 @@ class QImageFlowModelItem(object):
         return self.__image
 
 
-TImageFlowModelItem = NewType('TImageFlowModelItem', QImageFlowModelItem)
-
-
-class QImageFlowModel(QAbstractListModel):
-
-    ItemRole = Qt.UserRole + 1
-    UserRole = ItemRole + 1
+class QImageFlowView(QFlowView):
 
     def __init__(self, parent):
         # type: (QObject) -> NoReturn
-        super(QImageFlowModel, self).__init__(parent)
-        self.__items = []  # type: List[TImageFlowModelItem]
+        super(QImageFlowView, self).__init__(parent)
+        self.setViewMode(QListView.IconMode)
 
-    def append(self, item):
-        # type: (TImageFlowModelItem) -> NoReturn
-        self.beginInsertRows(QModelIndex(), self.rowCount(), self.rowCount() + 1)
-        self.__items.append(item)
-        self.endInsertRows()
 
-    def extend(self, items):
-        # type: (List[TImageFlowModelItem]) -> NoReturn
-        self.beginInsertRows(QModelIndex(), self.rowCount(), self.rowCount() + len(items))
-        self.__items.extend(items)
-        self.endInsertRows()
-
-    def remove(self, item):
-        # type: (TImageFlowModelItem) -> NoReturn
-        index = self.__items.index(item)
-        self.beginRemoveRows(QModelIndex(), index, index + 1)
-        self.__items.remove(item)
-        self.endRemoveRows()
-
-    def reset(self, items):
-        # type: (List[TImageFlowModelItem]) -> NoReturn
-        self.beginResetModel()
-        self.__items = items
-        self.endResetModel()
-
-    def clear(self):
-        # type: () -> NoReturn
-        self.reset([])
-
-    def item(self, index):
-        # type: (QModelIndex) -> TImageFlowModelItem
-        return self.__items[index.row()]
-
-    def rowCount(self, parent=QModelIndex()):
-        # type: (QModelIndex) -> int
-        return len(self.__items)
+class QImageFlowModel(QListModel):
 
     def data(self, index, role=Qt.DisplayRole):
-        # type: (QModelIndex, int) -> object
-        if not index.isValid():
+        # type: (QModelIndex, int) -> Any
+        if role != Qt.DecorationRole:
+            return None
+        if not index.isValid() or not 0 <= index.row() < self.rowCount():
             return None
 
-        if not 0 <= index.row() < len(self.__items):
-            return None
-
-        item = self.item(index)
-
-        if role == Qt.DecorationRole:
-            return item.image()
-
-        if role == QImageFlowModel.ItemRole:
-            return item
-
-        return None
+        return self.item(index).image()
 
 
-TImageFlowView = NewType('TImageFlowView', QImageFlowView)
-TImageFlowModel = NewType('TImageFlowModel', QImageFlowModel)
-
-
-class QImageFlowDirection(object):
-
-    LeftToRight = QListView.LeftToRight
-    TopToBottom = QListView.TopToBottom
+TImageFlowView = TypeVar('TImageFlowView', bound=QImageFlowView)
+TImageFlowModel = TypeVar('TImageFlowModel', bound=QImageFlowModel)
 
 
 class QImageFlowWidget(QWidget):
@@ -295,7 +307,7 @@ class QImageFlowWidget(QWidget):
         mainLayout.addWidget(self.__scrollArea)
         self.setLayout(mainLayout)
 
-        self.__flowDirection = self.setFlowDirection(QImageFlowDirection.LeftToRight)
+        self.__flowDirection = self.setFlowDirection(QFlowDirection.LeftToRight)
 
     def viewType(self):
         # type: () -> type
@@ -303,18 +315,18 @@ class QImageFlowWidget(QWidget):
 
     def modelType(self):
         # type: () -> type
-        return QImageFlowModel
+        return QListModel
 
     def setFlowDirection(self, direction):
         # type: (str) -> str
-        if direction == QImageFlowDirection.LeftToRight:
-            self.view().setFlow(direction)
+        if direction == QFlowDirection.LeftToRight:
+            self.view().setFlow(QListView.LeftToRight)
             self.__scrollArea.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.__scrollArea.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
             return direction
 
-        if direction == QImageFlowDirection.TopToBottom:
-            self.view().setFlow(direction)
+        if direction == QFlowDirection.TopToBottom:
+            self.view().setFlow(QListView.TopToBottom)
             self.__scrollArea.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
             self.__scrollArea.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             return direction
@@ -388,7 +400,7 @@ if __name__ == '__main__':
             print(index, item)
 
     class _FlowModel(QImageFlowModel):
-        FileNameRole = QImageFlowModel.UserRole + 1
+        FileNameRole = Qt.UserRole + 1
 
         def data(self, index, role=Qt.DisplayRole):
             if role == _FlowModel.FileNameRole:
@@ -410,12 +422,8 @@ if __name__ == '__main__':
     proxy.setFilterRole(_FlowModel.FileNameRole)
     imageFlow.setProxyModel(proxy)
 
-    def setFilter(text):
-        proxy.setFilterWildcard(text)
-
     searchFilter = QLineEdit()
-    # searchFilter.textChanged.connect(lambda text: proxy.setFilterWildcard(text))
-    searchFilter.textChanged.connect(setFilter)
+    searchFilter.textChanged.connect(lambda text: proxy.setFilterWildcard(text))
 
     w = QWidget()
     l = QVBoxLayout()
@@ -426,7 +434,8 @@ if __name__ == '__main__':
     window.show()
 
     for i, filePath in enumerate(glob.glob('C:/tmp/test_images2/*.png')):
-        image = QImage(filePath).scaled(100 + random.randint(0, 100), 100 + random.randint(0, 100))
+        # image = QImage(filePath).scaled(100 + random.randint(0, 100), 100 + random.randint(0, 100))
+        image = QImage(filePath).scaled(100, 100)
         item = _FlowItem(filePath)
         item.setImage(image)
         imageFlow.appendItem(item)
