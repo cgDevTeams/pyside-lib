@@ -1,6 +1,5 @@
 """
 """
-import sys
 from functools import partial
 
 from typing import (
@@ -32,6 +31,7 @@ from PySide2.QtWidgets import (
     QSizePolicy,
     QCompleter,
     QListView,
+    QScrollArea,
 )
 
 from PySide2.QtGui import (
@@ -219,7 +219,7 @@ class QListModel(QAbstractListModel):
             index = index.row()
         if isinstance(index, int):
             return self.__items[index]
-        raise RuntimeError()
+        raise RuntimeError('the type of "index" must be QModelIndex or int')
 
     def items(self):
         # type: () -> List[TListItem]
@@ -246,8 +246,8 @@ class QFlowView(QListView):
 
 class QFlowDirection(object):
 
-    LeftToRight = QListView.LeftToRight
-    TopToBottom = QListView.TopToBottom
+    LeftToRight = 'LeftToRight'
+    TopToBottom = 'TopToBottom'
 
 
 class QImageFlowModelItem(object):
@@ -371,73 +371,3 @@ class QImageFlowWidget(QWidget):
         # type: (str) -> TImageFlowModelItem
         image = QImage(filePath)
         return self.appendImage(image)
-
-
-if __name__ == '__main__':
-    import sys, glob, random, os
-    from PySide2.QtCore import QSize, QRegExp
-    from PySide2.QtWidgets import QApplication, QMainWindow, QScrollArea
-
-    app = QApplication()
-    window = QMainWindow()
-    window.setMinimumSize(QSize(640, 480))
-
-    class _FlowItem(QImageFlowModelItem):
-        def __init__(self, filePath):
-            super(_FlowItem, self).__init__()
-            self.filePath = filePath
-            self.name = os.path.basename(filePath)
-
-        def __repr__(self):
-            return "{}('{}')".format(self.__class__.__name__, self.filePath)
-
-    class _FlowView(QImageFlowView):
-        def mouseDoubleClickEvent(self, event):
-            index = self.indexAt(event.pos())
-            proxy = self.model()
-            index = proxy.mapToSource(index)
-            item = proxy.sourceModel().item(index)
-            print(index, item)
-
-    class _FlowModel(QImageFlowModel):
-        FileNameRole = Qt.UserRole + 1
-
-        def data(self, index, role=Qt.DisplayRole):
-            if role == _FlowModel.FileNameRole:
-                return self.item(index).name
-            if role == Qt.DisplayRole:
-                return self.item(index).name
-            return super(_FlowModel, self).data(index, role)
-
-    class _FlowWidget(QImageFlowWidget):
-        def viewType(self):
-            return _FlowView
-
-        def modelType(self):
-            return _FlowModel
-
-    imageFlow = _FlowWidget(window)
-
-    proxy = QSortFilterProxyModel()
-    proxy.setFilterRole(_FlowModel.FileNameRole)
-    imageFlow.setProxyModel(proxy)
-
-    searchFilter = QLineEdit()
-    searchFilter.textChanged.connect(lambda text: proxy.setFilterWildcard(text))
-
-    w = QWidget()
-    l = QVBoxLayout()
-    l.addWidget(searchFilter)
-    l.addWidget(imageFlow)
-    w.setLayout(l)
-    window.setCentralWidget(w)
-    window.show()
-
-    for i, filePath in enumerate(glob.glob('C:/tmp/test_images2/*.png')):
-        # image = QImage(filePath).scaled(100 + random.randint(0, 100), 100 + random.randint(0, 100))
-        image = QImage(filePath).scaled(100, 100)
-        item = _FlowItem(filePath)
-        item.setImage(image)
-        imageFlow.appendItem(item)
-
-    sys.exit(app.exec_())
