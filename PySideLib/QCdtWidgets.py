@@ -1,12 +1,20 @@
 """
 """
-
 import sys
 from functools import partial
 
+from typing import (
+    NoReturn,
+    List,
+)
+
 from PySide2.QtCore import (
+    Qt,
+    QObject,
+    QModelIndex,
     QStringListModel,
-    QSortFilterProxyModel
+    QAbstractListModel,
+    QSortFilterProxyModel,
 )
 
 from PySide2.QtWidgets import (
@@ -19,6 +27,11 @@ from PySide2.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QCompleter,
+    QListView,
+)
+
+from PySide2.QtGui import (
+    QImage,
 )
 
 
@@ -155,3 +168,117 @@ class QPartialMatchCompleter(QCompleter):
         self.local_completion_prefix = path
         self.updateModel()
         return ""
+
+
+class QImageFlowView(QListView):
+
+    def __init__(self, parent):
+        # type: (QObject) -> NoReturn
+        super(QImageFlowView, self).__init__(parent)
+        self.setFlow(QListView.LeftToRight)
+        self.setWrapping(True)
+        self.setResizeMode(QListView.Adjust)
+
+    def mouseDoubleClickEvent(self, e):
+        # type: (QMouseEvent) -> NoReturn
+        index = self.indexAt(e.pos())
+        index = self.__proxy_model.mapToSource(index)
+        item = self.__proxy_model.sourceModel().data(index, Qt.ItemDataRole)
+        if item is not None:
+            print(item.path)
+
+
+class QImageFlowModel(QAbstractListModel):
+
+    def __init__(self, parent):
+        # type: (QObject) -> NoReturn
+        super(QImageFlowModel, self).__init__(parent)
+        self.__items = []  # type: List[QImage]
+
+    def append(self, item):
+        # type: (QImage) -> NoReturn
+        self.beginInsertRows(QModelIndex(), self.rowCount(), self.rowCount() + 1)
+        self.__items.append(item)
+        self.endInsertRows()
+
+    def extend(self, items):
+        # type: (List[QImage]) -> NoReturn
+        self.beginInsertRows(QModelIndex(), self.rowCount(), self.rowCount() + len(items))
+        self.__items.extend(items)
+        self.endInsertRows()
+
+    def clear(self):
+        # type: () -> NoReturn
+        self.__items = []
+
+    def rowCount(self, parent=QModelIndex()):
+        # type: (QModelIndex) -> int
+        return len(self.__items)
+
+    def data(self, index, role=Qt.DisplayRole):
+        # type: (QModelIndex, Qt.ItemDataRole) -> object
+        if not index.isValid():
+            return None
+
+        if not 0 <= index.row() < len(self.__items):
+            return None
+
+        if role == Qt.DecorationRole:
+            return self.__items[index.row()]
+
+        return None
+
+
+class QImageFlowWidget(QWidget):
+
+    @property
+    def model(self):
+        # type: () -> QImageFlowModel
+        return self.proxyModel.sourceModel()
+
+    @property
+    def proxyModel(self):
+        # type: () -> QSortFilterProxyModel
+        return self.__view.model()
+
+    def __init__(self, parent):
+        # type: (QObject) -> NoReturn
+        super(QImageFlowWidget, self).__init__(parent)
+        self.__view = QImageFlowView(self)
+        self.__view.setViewMode(QListView.IconMode)
+
+        model = QImageFlowModel(self)
+        proxy = QSortFilterProxyModel(self)
+        proxy.setSourceModel(model)
+        self.__view.setModel(proxy)
+
+        layout = QHBoxLayout()
+        layout.addWidget(self.__view)
+        self.setLayout(layout)
+
+    def appendImage(self, image):
+        # type: (QImage) -> NoReturn
+        self.model.append(image)
+
+
+import sys, glob
+from PySide2.QtWidgets import QApplication, QMainWindow, QScrollArea
+
+app = QApplication()
+window = QMainWindow()
+
+area = QScrollArea()
+area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+area.setWidgetResizable(True)
+
+imageFlow = QImageFlowWidget(area)
+for filePath in glob.glob('C:/tmp/test_images2/*.png'):
+    image = QImage(filePath).scaled(100, 100)
+    imageFlow.appendImage(image)
+
+area.setWidget(imageFlow)
+window.setCentralWidget(area)
+window.show()
+
+sys.exit(app.exec_())
