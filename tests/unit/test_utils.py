@@ -24,10 +24,11 @@ class TestBatchImageLoader(object):
     @pytest.fixture()
     def context(self):
         ctx = TestBatchImageLoader._Context()
-        ctx.imagePath0 = 'C:/tmp/test_images/test_0000.png'
-        ctx.imagePath1 = 'C:/tmp/test_images/test_0001.png'
-        ctx.outImagePath0 = 'out_0000.png'
-        ctx.outImagePath1 = 'out_0001.png'
+        resourceDir = os.path.join(os.path.dirname(__file__), 'resources')
+        ctx.imagePath0 = os.path.join(resourceDir, 'test_0000.png')
+        ctx.imagePath1 = os.path.join(resourceDir, 'test_0001.png')
+        ctx.outImagePath0 = os.path.join(resourceDir, 'out_0000.png')
+        ctx.outImagePath1 = os.path.join(resourceDir, 'out_0001.png')
 
         yield ctx
 
