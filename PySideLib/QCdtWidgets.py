@@ -342,22 +342,23 @@ class QImageFlowWidget(QWidget):
         return self.view().model()
 
     def appendItem(self, item):
-        # type: (TImageFlowModelItem) -> NoReturn
+        # type: (TImageFlowModelItem) -> TImageFlowModelItem
         model = self.model()
         if isinstance(model, QAbstractProxyModel):
             model = model.sourceModel()
         model.append(item)
+        return item
 
     def appendImage(self, image):
-        # type: (QImage) -> NoReturn
+        # type: (QImage) -> TImageFlowModelItem
         item = QImageFlowModelItem()
         item.setImage(image)
-        self.appendItem(item)
+        return self.appendItem(item)
 
     def appendFile(self, filePath):
-        # type: (str) -> NoReturn
+        # type: (str) -> TImageFlowModelItem
         image = QImage(filePath)
-        self.appendImage(image)
+        return self.appendImage(image)
 
 
 if __name__ == '__main__':
