@@ -17,7 +17,6 @@ def base_window():
     app = QApplication()
     mainWindow = QMainWindow()
     mainWindow.show()
-    # app.exec_()
     return mainWindow
 
 
