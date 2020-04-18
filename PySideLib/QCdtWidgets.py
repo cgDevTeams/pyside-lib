@@ -38,7 +38,7 @@ class QTagWidget(QWidget):
         self.setLayout(self.mainLayout)
         self.mainLayout.addWidget(self.mainFrame)
 
-        self.hLayout = QVBoxLayout()
+        self.hLayout = QHBoxLayout()
         self.hLayout.setSpacing(4)
 
 
