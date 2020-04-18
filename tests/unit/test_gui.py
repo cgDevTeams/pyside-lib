@@ -10,10 +10,7 @@ class TestQTabWidget:
     Group of tests for QTabWidget
     """
 
-    def test_addWidget(self, sample_list_str):
+    def test_addWidget(self, qtbot, sample_list_str):
         from PySideLib.QCdtWidgets import QTagWidget
-        app = QApplication()
-        mainwWindow = QMainWindow()
-        tagWidget = QTagWidget(mainwWindow, sample_list_str)
-        mainwWindow.setCentralWidget(tagWidget)
-        mainwWindow.show()
+        tagWidget = QTagWidget(qtbot, sample_list_str)
+        qtbot.addWidget(tagWidget)

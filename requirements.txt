@@ -1,3 +1,4 @@
 PySide2
 Pytest
+pytest-qt
 typing
