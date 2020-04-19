@@ -73,7 +73,9 @@ def main():
     w = DirTreeWidget(window)
     w.setRootDirectoryPaths(['C:\\', 'D:\\'])
     w.setSelectionMode(QAbstractItemView.ExtendedSelection)
-    # w.itemSelectionChanged.connect(lambda x, y: print(w.selectedItems()))
+    w.itemSelectionChanged.connect(lambda x, y: print(w.selectedItems()))
+    w.itemClicked.connect(lambda idx: print(f'click: {idx}'))
+    w.itemDoubleClicked.connect(lambda idx: print(f'doubleclick: {idx}'))
     w.setContextMenuPolicy(Qt.CustomContextMenu)
 
     def _ctx_menu(point):

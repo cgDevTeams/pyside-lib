@@ -523,17 +523,25 @@ TDirectoryTreeItem = TypeVar('TDirectoryTreeItem', bound=QDirectoryTreeItem)
 class QDirectoryTreeView(QTreeView):
 
     itemSelectionChanged = Signal((QItemSelection, QItemSelection))
+    itemClicked = Signal(QModelIndex)
+    itemDoubleClicked = Signal(QModelIndex)
 
     def __init__(self, parent):
         # type: (QObject) -> NoReturn
         super(QDirectoryTreeView, self).__init__(parent)
-        self.expanded.connect(self.__on_item_expanded)
+        self.expanded.connect(self.__onItemExpanded)
+        self.clicked.connect(self.itemClicked.emit)
 
     def selectionChanged(self, selected, deselected):
         # type: (QItemSelection, QItemSelection) -> NoReturn
         self.itemSelectionChanged.emit(selected, deselected)
 
-    def __on_item_expanded(self, index):
+    def mouseDoubleClickEvent(self, event):
+        # type: (QMouseEvent) -> NoReturn
+        index = self.indexAt(event.pos())
+        self.itemDoubleClicked.emit(index)
+
+    def __onItemExpanded(self, index):
         # type: (QModelIndex) -> NoReturn
         model = self.model()
         if model is None:
@@ -585,12 +593,16 @@ TDirectoryTreeModel = TypeVar('TDirectoryTreeModel', bound=QDirectoryTreeModel)
 class QDirectoryTreeWidget(_ViewModelWidgetBase):
 
     itemSelectionChanged = Signal(QItemSelection, QItemSelection)
+    itemClicked = Signal(QModelIndex)
+    itemDoubleClicked = Signal(QModelIndex)
 
     def __init__(self, parent):
         # type: (QObject) -> NoReturn
         super(QDirectoryTreeWidget, self).__init__(parent, QDirectoryTreeView, QDirectoryTreeModel)
         self._view.itemSelectionChanged.connect(self.itemSelectionChanged.emit)
         self._view.customContextMenuRequested.connect(self.customContextMenuRequested.emit)
+        self._view.itemClicked.connect(self.itemClicked.emit)
+        self._view.itemDoubleClicked.connect(self.itemDoubleClicked)
 
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
