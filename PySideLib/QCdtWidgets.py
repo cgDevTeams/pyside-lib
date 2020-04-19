@@ -419,19 +419,14 @@ TImageFlowView = TypeVar('TImageFlowView', bound=QImageFlowView)
 TImageFlowModel = TypeVar('TImageFlowModel', bound=QImageFlowModel)
 
 
-class QImageFlowWidget(QWidget):
+class QImageFlowWidget(_ViewModelWidgetBase):
 
     def __init__(self, parent):
         # type: (QObject) -> NoReturn
-        super(QImageFlowWidget, self).__init__(parent)
-        model = self.modelType()(self)
-
-        self.__view = self.viewType()(self)
-        self.__view.setModel(model)
-
+        super(QImageFlowWidget, self).__init__(parent, QImageFlowView, QImageFlowModel)
         self.__scrollArea = QScrollArea()
         self.__scrollArea.setWidgetResizable(True)
-        self.__scrollArea.setWidget(self.__view)
+        self.__scrollArea.setWidget(self._view)
 
         mainLayout = QHBoxLayout()
         mainLayout.setContentsMargins(0, 0, 0, 0)
@@ -439,14 +434,6 @@ class QImageFlowWidget(QWidget):
         self.setLayout(mainLayout)
 
         self.__flowDirection = self.setFlowDirection(QFlowDirection.LeftToRight)
-
-    def viewType(self):
-        # type: () -> type
-        return QImageFlowView
-
-    def modelType(self):
-        # type: () -> type
-        return QListModel
 
     def setFlowDirection(self, direction):
         # type: (str) -> str
@@ -475,14 +462,6 @@ class QImageFlowWidget(QWidget):
         else:
             proxy.setSourceModel(model)
         self.view().setModel(proxy)
-
-    def view(self):
-        # type: () -> TImageFlowView
-        return self.__view
-
-    def model(self):
-        # type: () -> TImageFlowModel
-        return self.view().model()
 
     def appendItem(self, item):
         # type: (TImageFlowModelItem) -> TImageFlowModelItem
