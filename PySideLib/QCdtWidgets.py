@@ -501,6 +501,9 @@ class QDirectoryTreeItem(QStandardItem):
         return False
 
 
+TDirectoryTreeItem = TypeVar('TDirectoryTreeItem', bound=QDirectoryTreeItem)
+
+
 class QDirectoryTreeView(QTreeView):
 
     itemClicked = Signal(QDirectoryTreeItem)
@@ -537,7 +540,7 @@ class QDirectoryTreeModel(QStandardItemModel):
         # type: (List[Union[str, pathlib.Path]]) -> NoReturn
         item = self.invisibleRootItem()
         item.removeRows(0, item.rowCount())
-        item.appendRows([QDirectoryTreeItem(path) for path in paths])
+        item.appendRows([self.createItem(path) for path in paths])
 
     def headerData(self, section, orientation, role):
         # type: (int, int, int) -> str
@@ -554,7 +557,7 @@ class QDirectoryTreeModel(QStandardItemModel):
         return item.name()
 
     def createItem(self, path):
-        # type: (pathlib.Path) -> QDirectoryTreeItem()
+        # type: (pathlib.Path) -> TDirectoryTreeItem()
         return QDirectoryTreeItem(path)
 
     def expand(self, index):
@@ -564,6 +567,10 @@ class QDirectoryTreeModel(QStandardItemModel):
         item.appendRows([self.createItem(path) for path in self.path().glob('*') if path.is_dir()])
 
 
+TDirectoryTreeView = TypeVar('TDirectoryTreeView', bound=QDirectoryTreeView)
+TDirectoryTreeModel = TypeVar('TDirectoryTreeModel', bound=QDirectoryTreeModel)
+
+
 class QDirectoryTreeWidget(QWidget):
 
     itemClicked = Signal(QDirectoryTreeItem)
@@ -571,9 +578,9 @@ class QDirectoryTreeWidget(QWidget):
     def __init__(self, parent):
         # type: (QObject) -> NoReturn
         super(QDirectoryTreeWidget, self).__init__(parent)
-        self.__model = QDirectoryTreeModel(self)
-        self.__view = QDirectoryTreeView(self)
-        self.__view.setModel(self.__model)
+        model = self.modelType()(self)
+        self.__view = self.viewType()(self)
+        self.__view.setModel(model)
         self.__view.itemClicked.connect(self.itemClicked.emit)
 
         layout = QHBoxLayout()
@@ -581,6 +588,25 @@ class QDirectoryTreeWidget(QWidget):
         layout.addWidget(self.__view)
         self.setLayout(layout)
 
+    def viewType(self):
+        # type: () -> type
+        return QDirectoryTreeView
+
+    def modelType(self):
+        # type: () -> type
+        return QDirectoryTreeModel
+
+    def view(self):
+        # type: () -> TDirectoryTreeView
+        return self.__view
+
+    def model(self):
+        # type: () -> Union[TDirectoryTreeModel, QAbstractProxyModel]
+        return self.view().model()
+
     def setRootDirectoryPaths(self, paths):
         # type: (List[Union[str, pathlib.Path]]) -> NoReturn
-        self.__model.setRootDirectoryPaths(paths)
+        model = self.model()
+        if isinstance(model, QAbstractProxyModel):
+            model = model.sourceModel()
+        model.setRootDirectoryPaths(paths)
