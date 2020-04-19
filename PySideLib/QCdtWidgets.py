@@ -19,12 +19,14 @@ from PySide2.QtCore import (
     QModelIndex,
     QAbstractListModel,
     QStringListModel,
+    QAbstractItemModel,
     QAbstractProxyModel,
     QSortFilterProxyModel,
     QRect,
     QPoint,
     QSize,
     Signal,
+    QItemSelection,
 )
 
 from PySide2.QtWidgets import (
@@ -41,6 +43,7 @@ from PySide2.QtWidgets import (
     QListView,
     QScrollArea,
     QTreeView,
+    QAbstractItemView,
 )
 
 from PySide2.QtGui import (
@@ -378,6 +381,40 @@ class QImageFlowModel(QListModel):
         return self.item(index).image()
 
 
+class _ViewModelWidgetBase(QWidget):
+
+    def __init__(self, parent, defaultViewType, defaultModelType):
+        # type: (QObject, type, type) -> NoReturn
+        super(_ViewModelWidgetBase, self).__init__(parent)
+        self.__defaultViewType = defaultViewType
+        self.__defaultModelType = defaultModelType
+        self._view = self.viewType()(self)  # type: QAbstractItemView
+        self._view.setModel(self.modelType()(self))
+
+    def viewType(self):
+        # type: () -> type
+        return self.__defaultViewType
+
+    def modelType(self):
+        # type: () -> type
+        return self.__defaultModelType
+
+    def view(self):
+        # type: () -> QAbstractItemView
+        return self._view
+
+    def model(self):
+        # type: () -> QAbstractItemModel
+        return self.view().model()
+
+    def _sourceModel(self):
+        # type: () -> QAbstractItemModel()
+        model = self.model()
+        if isinstance(model, QAbstractProxyModel):
+            model = model.sourceModel()
+        return model
+
+
 TImageFlowView = TypeVar('TImageFlowView', bound=QImageFlowView)
 TImageFlowModel = TypeVar('TImageFlowModel', bound=QImageFlowModel)
 
@@ -506,21 +543,16 @@ TDirectoryTreeItem = TypeVar('TDirectoryTreeItem', bound=QDirectoryTreeItem)
 
 class QDirectoryTreeView(QTreeView):
 
-    itemClicked = Signal(QDirectoryTreeItem)
+    itemSelectionChanged = Signal((QItemSelection, QItemSelection))
 
     def __init__(self, parent):
         # type: (QObject) -> NoReturn
         super(QDirectoryTreeView, self).__init__(parent)
-        self.clicked.connect(self.__on_item_clicked)
         self.expanded.connect(self.__on_item_expanded)
 
-    def __on_item_clicked(self, index):
-        # type: (QModelIndex) -> NoReturn
-        model = self.model()
-        if model is None:
-            return
-        item = model.itemFromIndex(index)
-        self.itemClicked.emit(item)
+    def selectionChanged(self, selected, deselected):
+        # type: (QItemSelection, QItemSelection) -> NoReturn
+        self.itemSelectionChanged.emit(selected, deselected)
 
     def __on_item_expanded(self, index):
         # type: (QModelIndex) -> NoReturn
@@ -563,50 +595,54 @@ class QDirectoryTreeModel(QStandardItemModel):
     def expand(self, index):
         # type: (QModelIndex) -> NoReturn
         item = self.itemFromIndex(index)
-        item.removeRows(0, self.rowCount())
-        item.appendRows([self.createItem(path) for path in self.path().glob('*') if path.is_dir()])
+        item.removeRows(0, item.rowCount())
+        item.appendRows([self.createItem(path) for path in item.path().glob('*') if path.is_dir()])
 
 
 TDirectoryTreeView = TypeVar('TDirectoryTreeView', bound=QDirectoryTreeView)
 TDirectoryTreeModel = TypeVar('TDirectoryTreeModel', bound=QDirectoryTreeModel)
 
 
-class QDirectoryTreeWidget(QWidget):
+class QDirectoryTreeWidget(_ViewModelWidgetBase):
 
-    itemClicked = Signal(QDirectoryTreeItem)
+    itemSelectionChanged = Signal(QItemSelection, QItemSelection)
 
     def __init__(self, parent):
         # type: (QObject) -> NoReturn
-        super(QDirectoryTreeWidget, self).__init__(parent)
-        model = self.modelType()(self)
-        self.__view = self.viewType()(self)
-        self.__view.setModel(model)
-        self.__view.itemClicked.connect(self.itemClicked.emit)
+        super(QDirectoryTreeWidget, self).__init__(parent, QDirectoryTreeView, QDirectoryTreeModel)
+        self._view.itemSelectionChanged.connect(self.itemSelectionChanged.emit)
+        self._view.customContextMenuRequested.connect(self.customContextMenuRequested.emit)
 
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.__view)
+        layout.addWidget(self._view)
         self.setLayout(layout)
 
-    def viewType(self):
-        # type: () -> type
-        return QDirectoryTreeView
+    def setSelectionMode(self, mode):
+        # type: (int) -> NoReturn
+        self._view.setSelectionMode(mode)
 
-    def modelType(self):
-        # type: () -> type
-        return QDirectoryTreeModel
+    def setContextMenuPolicy(self, policy):
+        # type: (ContextMenuPolicy) -> NoReturn
+        self._view.setContextMenuPolicy(policy)
 
-    def view(self):
-        # type: () -> TDirectoryTreeView
-        return self.__view
+    def itemFromIndex(self, index):
+        # type: (QModelIndex) -> TDirectoryTreeItem
+        model = self.model()
+        if isinstance(model, QAbstractProxyModel):
+            index = model.mapToSource(index)
+            model = model.sourceModel()
+        return model.itemFromIndex(index)
 
-    def model(self):
-        # type: () -> Union[TDirectoryTreeModel, QAbstractProxyModel]
-        return self.view().model()
+    def currentItem(self):
+        # type: () -> TDirectoryTreeItem
+        index = self.view().currentIndex()
+        return self.itemFromIndex(index)
+
+    def selectedItems(self):
+        # type: () -> List[TDirectoryTreeItem]
+        return [self.itemFromIndex(index) for index in self._view.selectedIndexes()]
 
     def setRootDirectoryPaths(self, paths):
         # type: (List[Union[str, pathlib.Path]]) -> NoReturn
-        model = self.model()
-        if isinstance(model, QAbstractProxyModel):
-            model = model.sourceModel()
-        model.setRootDirectoryPaths(paths)
+        self._sourceModel().setRootDirectoryPaths(paths)
