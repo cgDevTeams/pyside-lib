@@ -1,10 +1,13 @@
 """
 """
+import os
+import pathlib
 from functools import partial
 
 from typing import (
     TypeVar,
     NoReturn,
+    Optional,
     Any,
     List,
     Union,
@@ -21,6 +24,7 @@ from PySide2.QtCore import (
     QRect,
     QPoint,
     QSize,
+    Signal,
 )
 
 from PySide2.QtWidgets import (
@@ -36,10 +40,13 @@ from PySide2.QtWidgets import (
     QCompleter,
     QListView,
     QScrollArea,
+    QTreeView,
 )
 
 from PySide2.QtGui import (
     QImage,
+    QStandardItem,
+    QStandardItemModel,
 )
 
 
@@ -458,3 +465,122 @@ class QImageFlowWidget(QWidget):
         # type: (str) -> TImageFlowModelItem
         image = QImage(filePath)
         return self.appendImage(image)
+
+
+class QDirectoryTreeItem(QStandardItem):
+
+    def __init__(self, path):
+        # type: (Union[str, pathlib.Path]) -> NoReturn
+        super(QDirectoryTreeItem, self).__init__()
+        if isinstance(path, str):
+            self.__path = pathlib.Path(path)
+        else:
+            self.__path = path
+
+        if self.hasChild():
+            self.appendRow(None)
+
+        self.setEditable(False)
+
+    def path(self):
+        # type: () -> pathlib.Path
+        return self.__path
+
+    def name(self):
+        # type: () -> str
+        path = self.path()
+        if len(path.name) > 0:
+            return path.name
+        return path.drive
+
+    def hasChild(self):
+        # type: () -> bool
+        for child in self.path().glob('*'):
+            if child.is_dir():
+                return True
+        return False
+
+
+class QDirectoryTreeView(QTreeView):
+
+    itemClicked = Signal(QDirectoryTreeItem)
+
+    def __init__(self, parent):
+        # type: (QObject) -> NoReturn
+        super(QDirectoryTreeView, self).__init__(parent)
+        self.clicked.connect(self.__on_item_clicked)
+        self.expanded.connect(self.__on_item_expanded)
+
+    def __on_item_clicked(self, index):
+        # type: (QModelIndex) -> NoReturn
+        model = self.model()
+        if model is None:
+            return
+        item = model.itemFromIndex(index)
+        self.itemClicked.emit(item)
+
+    def __on_item_expanded(self, index):
+        # type: (QModelIndex) -> NoReturn
+        model = self.model()
+        if model is None:
+            return
+        model.expand(index)
+
+
+class QDirectoryTreeModel(QStandardItemModel):
+
+    def __init__(self, parent):
+        # type: (QObject) -> NoReturn
+        super(QDirectoryTreeModel, self).__init__(parent)
+
+    def setRootDirectoryPaths(self, paths):
+        # type: (List[Union[str, pathlib.Path]]) -> NoReturn
+        item = self.invisibleRootItem()
+        item.removeRows(0, item.rowCount())
+        item.appendRows([QDirectoryTreeItem(path) for path in paths])
+
+    def headerData(self, section, orientation, role):
+        # type: (int, int, int) -> str
+        return ''
+
+    def data(self, index, role=Qt.DisplayRole):
+        # type: (QModelIndex, int) -> Any
+        if role != Qt.DisplayRole:
+            return None
+        if not index.isValid() or index.row() < 0:
+            return None
+
+        item = self.itemFromIndex(index)
+        return item.name()
+
+    def createItem(self, path):
+        # type: (pathlib.Path) -> QDirectoryTreeItem()
+        return QDirectoryTreeItem(path)
+
+    def expand(self, index):
+        # type: (QModelIndex) -> NoReturn
+        item = self.itemFromIndex(index)
+        item.removeRows(0, self.rowCount())
+        item.appendRows([self.createItem(path) for path in self.path().glob('*') if path.is_dir()])
+
+
+class QDirectoryTreeWidget(QWidget):
+
+    itemClicked = Signal(QDirectoryTreeItem)
+
+    def __init__(self, parent):
+        # type: (QObject) -> NoReturn
+        super(QDirectoryTreeWidget, self).__init__(parent)
+        self.__model = QDirectoryTreeModel(self)
+        self.__view = QDirectoryTreeView(self)
+        self.__view.setModel(self.__model)
+        self.__view.itemClicked.connect(self.itemClicked.emit)
+
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.__view)
+        self.setLayout(layout)
+
+    def setRootDirectoryPaths(self, paths):
+        # type: (List[Union[str, pathlib.Path]]) -> NoReturn
+        self.__model.setRootDirectoryPaths(paths)
