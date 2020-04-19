@@ -26,6 +26,7 @@ from PySide2.QtWidgets import (
     QHBoxLayout,
     QAbstractItemView,
     QMenu,
+    QSplitter,
 )
 
 from PySideLib.QCdtWidgets import (
@@ -33,6 +34,9 @@ from PySideLib.QCdtWidgets import (
     QDirectoryTreeModel,
     QDirectoryTreeView,
     QDirectoryTreeWidget,
+    QFileListModel,
+    QFileListView,
+    QFileListWidget,
 )
 
 from PySideLib.QCdtUtils import (
@@ -70,13 +74,13 @@ def main():
 
     DirTreeModel.dirIcon = QIcon(os.path.join(os.path.dirname(__file__), 'resources', 'Folder_16x.png'))
 
-    w = DirTreeWidget(window)
-    w.setRootDirectoryPaths(['C:\\', 'D:\\'])
-    w.setSelectionMode(QAbstractItemView.ExtendedSelection)
-    w.itemSelectionChanged.connect(lambda x, y: print(w.selectedItems()))
-    w.itemClicked.connect(lambda idx: print(f'click: {idx}'))
-    w.itemDoubleClicked.connect(lambda idx: print(f'doubleclick: {idx}'))
-    w.setContextMenuPolicy(Qt.CustomContextMenu)
+    tree = DirTreeWidget(window)
+    tree.setRootDirectoryPaths(['C:\\', 'D:\\'])
+    tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
+    tree.itemSelectionChanged.connect(lambda x, y: print(tree.selectedItems()))
+    tree.itemClicked.connect(lambda idx: print(f'click: {idx}'))
+    tree.itemDoubleClicked.connect(lambda idx: print(f'doubleclick: {idx}'))
+    tree.setContextMenuPolicy(Qt.CustomContextMenu)
 
     def _ctx_menu(point):
         def _open_directory(path):
@@ -90,15 +94,26 @@ def main():
         for label in menu_items.keys():
             menu.addAction(label)
 
-        executed_action = menu.exec_(w.mapToGlobal(point))
+        executed_action = menu.exec_(tree.mapToGlobal(point))
         action = menu_items[executed_action.text()]
 
-        item = w.currentItem()
+        item = tree.currentItem()
         action(item.path)
 
-    w.customContextMenuRequested.connect(_ctx_menu)
+    tree.customContextMenuRequested.connect(_ctx_menu)
 
-    window.setCentralWidget(w)
+    files = QFileListWidget(window)
+    files.setSelectionMode(QAbstractItemView.ExtendedSelection)
+    files.itemSelectionChanged.connect(lambda x, y: print(tree.selectedItems()))
+    files.itemClicked.connect(lambda idx: print(f'click: {idx}'))
+    files.itemDoubleClicked.connect(lambda idx: print(f'doubleclick: {idx}'))
+    tree.itemClicked.connect(lambda index: files.setDirectoryPath(tree.itemFromIndex(index).path()))
+
+    splitter = QSplitter()
+    splitter.addWidget(tree)
+    splitter.addWidget(files)
+
+    window.setCentralWidget(splitter)
     window.show()
     app.exec_()
 

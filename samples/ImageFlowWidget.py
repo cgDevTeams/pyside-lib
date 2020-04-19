@@ -51,7 +51,7 @@ class FlowView(QImageFlowView):
         index = self.indexAt(event.pos())
         proxy = self.model()
         index = proxy.mapToSource(index)
-        item = proxy.sourceModel().item(index)
+        item = proxy.sourceModel().itemFromIndex(index)
         QMessageBox.information(None, 'test', item.filePath)
 
 
@@ -60,9 +60,9 @@ class FlowModel(QImageFlowModel):
 
     def data(self, index, role=Qt.DisplayRole):
         if role == FlowModel.FileNameRole:
-            return self.item(index).name
+            return self.itemFromIndex(index).name
         if role == Qt.DisplayRole:
-            return self.item(index).name
+            return self.itemFromIndex(index).name
         return super(FlowModel, self).data(index, role)
 
 

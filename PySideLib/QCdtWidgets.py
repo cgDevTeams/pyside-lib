@@ -11,6 +11,7 @@ from typing import (
     Any,
     List,
     Union,
+    Iterable,
 )
 
 from PySide2.QtCore import (
@@ -314,7 +315,7 @@ class QListModel(QAbstractListModel):
         # type: () -> NoReturn
         self.reset([])
 
-    def item(self, index):
+    def itemFromIndex(self, index):
         # type: (Union[int, QModelIndex]) -> TListItem
         if isinstance(index, QModelIndex):
             index = index.row()
@@ -378,7 +379,7 @@ class QImageFlowModel(QListModel):
         if not index.isValid() or not 0 <= index.row() < self.rowCount():
             return None
 
-        return self.item(index).image()
+        return self.itemFromIndex(index).image()
 
 
 class _ViewModelWidgetBase(QWidget):
@@ -637,3 +638,130 @@ class QDirectoryTreeWidget(_ViewModelWidgetBase):
     def setRootDirectoryPaths(self, paths):
         # type: (List[Union[str, pathlib.Path]]) -> NoReturn
         self._sourceModel().setRootDirectoryPaths(paths)
+
+
+class QFileListItem(QStandardItem):
+
+    def __init__(self, path):
+        # type: (Union[str, pathlib.Path]) -> NoReturn
+        super(QFileListItem, self).__init__()
+        if isinstance(path, str):
+            self.__path = pathlib.Path(path)
+        else:
+            self.__path = path
+
+        self.setEditable(False)
+
+    def path(self):
+        # type: () -> pathlib.Path
+        return self.__path
+
+
+TFileListItem = TypeVar('TFileListItem', bound=QFileListItem)
+
+
+class QFileListView(QListView):
+
+    itemSelectionChanged = Signal((QItemSelection, QItemSelection))
+    itemClicked = Signal(QModelIndex)
+    itemDoubleClicked = Signal(QModelIndex)
+
+    def __init__(self, parent):
+        # type: (QObject) -> NoReturn
+        super(QFileListView, self).__init__(parent)
+
+    def mouseReleaseEvent(self, e):
+        # type: (QMouseEvent) -> NoReturn
+        index = self.indexAt(e.pos())
+        self.itemClicked.emit(index)
+
+    def mouseDoubleClickEvent(self, e):
+        # type: (QMouseEvent) -> NoReturn
+        index = self.indexAt(e.pos())
+        self.itemDoubleClicked.emit(index)
+
+    def selectionChanged(self, selected, deselected):
+        # type: (QItemSelection, QItemSelection) -> NoReturn
+        self.itemSelectionChanged.emit(selected, deselected)
+
+
+class QFileListModel(QListModel):
+
+    def __init__(self, parent):
+        # type: (QObject) -> NoReturn
+        super(QFileListModel, self).__init__(parent)
+
+    def setDirectoryPath(self, path):
+        # type: (Union[str, pathlib.Path]) -> None
+        if isinstance(path, str):
+            path = pathlib.Path(path)
+
+        paths = []  # type: Iterable[pathlib.Path]
+        if path.is_dir():
+            paths = path.glob('*')
+
+        self.reset([self.createItem(path) for path in paths])
+
+    def createItem(self, path):
+        # type: (pathlib.Path) -> TFileListItem()
+        return QFileListItem(path)
+
+    def data(self, index, role):
+        # type: (QModelIndex, int) -> Any
+        if not index.isValid() or not 0 <= index.row() < self.rowCount():
+            return None
+
+        item = self.itemFromIndex(index)
+        if role == Qt.DisplayRole:
+            return item.path().name
+
+        return None
+
+
+class QFileListWidget(_ViewModelWidgetBase):
+
+    itemSelectionChanged = Signal((QItemSelection, QItemSelection))
+    itemClicked = Signal(QModelIndex)
+    itemDoubleClicked = Signal(QModelIndex)
+
+    def __init__(self, parent):
+        # type: (QObject) -> NoReturn
+        super(QFileListWidget, self).__init__(parent, QFileListView, QFileListModel)
+        self._view.customContextMenuRequested.connect(self.customContextMenuRequested.emit)
+        self._view.itemSelectionChanged.connect(self.itemSelectionChanged.emit)
+        self._view.itemClicked.connect(self.itemClicked.emit)
+        self._view.itemDoubleClicked.connect(self.itemDoubleClicked)
+
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._view)
+        self.setLayout(layout)
+
+    def setSelectionMode(self, mode):
+        # type: (int) -> NoReturn
+        self._view.setSelectionMode(mode)
+
+    def setContextMenuPolicy(self, policy):
+        # type: (ContextMenuPolicy) -> NoReturn
+        self._view.setContextMenuPolicy(policy)
+
+    def itemFromIndex(self, index):
+        # type: (QModelIndex) -> TDirectoryTreeItem
+        model = self.model()
+        if isinstance(model, QAbstractProxyModel):
+            index = model.mapToSource(index)
+            model = model.sourceModel()
+        return model.itemFromIndex(index)
+
+    def currentItem(self):
+        # type: () -> TDirectoryTreeItem
+        index = self.view().currentIndex()
+        return self.itemFromIndex(index)
+
+    def selectedItems(self):
+        # type: () -> List[TDirectoryTreeItem]
+        return [self.itemFromIndex(index) for index in self._view.selectedIndexes()]
+
+    def setDirectoryPath(self, path):
+        # type: (Union[str, pathlib.Path]) -> None
+        return self._sourceModel().setDirectoryPath(path)
