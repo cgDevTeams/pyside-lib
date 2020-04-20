@@ -86,10 +86,10 @@ class QTagWidget(QWidget):
     def show(self):
         self.show()
 
-    def setup_ui(self):
+    def setupUi(self):
         self.lineEdit.returnPressed.connect(self.create_tags)
 
-    def create_tags(self):
+    def createTags(self):
         new_tags = self.lineEdit.text().split(', ')
         self.lineEdit.setText('')
         self.tags.extend(new_tags)
@@ -110,7 +110,7 @@ class QTagWidget(QWidget):
             self.lineEdit.setDisabled(True)
             return
 
-    def add_tag_to_bar(self, text):
+    def addTagToBar(self, text):
         tag = QFrame()
         tag.setStyleSheet(
             'border:1px solid rgb(192, 192, 192); border-radius: 4px;')
@@ -139,7 +139,7 @@ class QTagWidget(QWidget):
 
         self.flowLayout.addWidget(tag)
 
-    def delete_tag(self, tag_name):
+    def deleteTag(self, tag_name):
         self.tags.remove(tag_name)
 
         # Make input available if tags count is less than 5
