@@ -81,13 +81,13 @@ class QTagWidget(QWidget):
 
         self.refresh()
 
-        self.setup_ui()
+        self.setupUi()
 
     def show(self):
         self.show()
 
     def setupUi(self):
-        self.lineEdit.returnPressed.connect(self.create_tags)
+        self.lineEdit.returnPressed.connect(self.createTags)
 
     def createTags(self):
         new_tags = self.lineEdit.text().split(', ')
@@ -101,7 +101,7 @@ class QTagWidget(QWidget):
         for i in reversed(range(self.flowLayout.count())):
             self.flowLayout.itemAt(i).widget().setParent(None)
         for tag in self.tags:
-            self.add_tag_to_bar(tag)
+            self.addTagToBar(tag)
         self.flowLayout.addWidget(self.lineEdit)
         self.lineEdit.setFocus()
 
@@ -132,7 +132,7 @@ class QTagWidget(QWidget):
         x_button.setFixedSize(20, 20)
         x_button.setStyleSheet('border:0px; font-weight:bold')
         x_button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum)
-        x_button.clicked.connect(partial(self.delete_tag, text))
+        x_button.clicked.connect(partial(self.deleteTag, text))
         hbox.addWidget(x_button)
 
         tag.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
