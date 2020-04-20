@@ -660,6 +660,12 @@ class QFileListItem(QStandardItem):
 TFileListItem = TypeVar('TFileListItem', bound=QFileListItem)
 
 
+class QFileListViewMode(object):
+
+    ListMode = 'ListMode'
+    IconMode = 'IconMode'
+
+
 class QFileListView(QListView):
 
     itemSelectionChanged = Signal((QItemSelection, QItemSelection))
@@ -683,6 +689,16 @@ class QFileListView(QListView):
     def selectionChanged(self, selected, deselected):
         # type: (QItemSelection, QItemSelection) -> NoReturn
         self.itemSelectionChanged.emit(selected, deselected)
+
+    def setViewMode(self, mode):
+        # type: (str) -> NoReturn
+        if mode == QFileListViewMode.ListMode:
+            super(QFileListView, self).setViewMode(QListView.ListMode)
+            return
+
+        if mode == QFileListViewMode.IconMode:
+            super(QFileListView, self).setViewMode(QListView.IconMode)
+            return
 
 
 class QFileListModel(QListModel):
@@ -736,6 +752,10 @@ class QFileListWidget(_ViewModelWidgetBase):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._view)
         self.setLayout(layout)
+
+    def setViewMode(self, mode):
+        # type: (str) -> NoReturn
+        self._view.setViewMode(mode)
 
     def setSelectionMode(self, mode):
         # type: (int) -> NoReturn
