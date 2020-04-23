@@ -155,7 +155,8 @@ def getFileIcons(filePaths):
     if os.name == 'nt':
         platform = 'win10-x64'
     else:
-        raise NotImplementedError()
+        # TODO: Mac/Linux対応
+        raise NotImplementedError('update submodule "IconExtractor" and build for your platform!')
 
     executerPath = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'tools', 'IconExtractor', 'build', platform, 'IconExtractor.exe'))
 
