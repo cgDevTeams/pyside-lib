@@ -138,10 +138,8 @@ def main():
     def _updateFiles(index):
         item = tree.itemFromIndex(index)
 
-        filePaths = []
-        for path in item.path().glob('*'):
-            iconLoader.addEntry(path)
-            filePaths.append(path)
+        filePaths = list(item.path().glob('*'))
+        iconLoader.reset(filePaths)
 
         def _set_icons():
             for path in filePaths:
@@ -150,7 +148,7 @@ def main():
             files.model().refresh()
 
         iconLoader.completed.connect(_set_icons)
-        iconLoader.loaded.connect(print)
+        # iconLoader.loaded.connect(print)
         iconLoader.load_async(filePaths)
 
         files.setDirectoryPath(tree.itemFromIndex(index).path())

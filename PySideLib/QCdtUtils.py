@@ -14,6 +14,7 @@ from typing import (
     NoReturn,
     Optional,
     Callable,
+    Iterable,
     Any,
     List,
     Dict,
@@ -150,8 +151,8 @@ class BatchImageLoader(QObject):
         self.loaded.emit(index)
 
 
-def getFileIcons(filePaths):
-    # type: (List[Union[str, pathlib.Path]]) -> Dict[str, QImage]
+def getFileIcons(filePaths, by_extention=True):
+    # type: (List[Union[str, pathlib.Path]], bool) -> Dict[str, QImage]
     if os.name == 'nt':
         platform = 'win10-x64'
     else:
@@ -169,7 +170,7 @@ def getFileIcons(filePaths):
     args = {
         'input': filePaths,
         'output': outputPath.as_posix(),
-        'by-extension': True,
+        'by-extension': by_extention,
     }
 
     argsFilePath = os.path.join(tempfile.gettempdir(), '_create_icons_args.txt')
@@ -223,36 +224,60 @@ class QFileIconLoader(QObject):
         self.__paths = []  # type: List[pathlib.Path]
         self.__icons = {}  # type: Dict[pathlib.Path, QIcon]
         self.__pool = multiprocessing.pool.ThreadPool(processes=1)
+        self.completed.connect(self.reset)
 
-    def addEntry(self, filePath):
+    def append(self, filePath):
         # type: (Union[str, pathlib.Path]) -> NoReturn
         if isinstance(filePath, str):
             filePath = pathlib.Path(filePath)
         self.__paths.append(filePath)
 
-    def icon(self, name):
-        # type: (str) -> Optional[QIcon]
-        return self.__icons.get(name)
+    def extend(self, filePaths):
+        # type: (Iterable[Union[str, pathlib.Path]]) -> NoReturn
+        for filePath in filePaths:
+            self.append(filePath)
+
+    def reset(self, filePaths=[]):
+        # type: (Iterable[Union[str, pathlib.Path]]) -> NoReturn
+        self.__paths.clear()
+        self.extend(filePaths)
+
+    def icon(self, filePath):
+        # type: (Union[str, pathlib.Path]) -> Optional[QIcon]
+        if isinstance(filePath, str):
+            filePath = pathlib.Path(filePath)
+        if filePath.is_dir():
+            return None
+        return self.__icons.get(filePath.suffix)
 
     def load_async(self, useCache=True):
         # type: (bool) -> multiprocessing.pool.AsyncResult
-        paths = self.__paths.copy()
+        paths = []  # type: List[pathlib.Path]
+
+        # ファイルアイコンを持つのは非ディレクトリだけ
+        for path in self.__paths:
+            if not path.is_dir():
+                paths.append(path)
+
         if useCache:
             for path in self.__paths:
-                icon = self.__icons.get(path.name)
+                icon = self.__icons.get(path.suffix)
                 if icon is not None:
                     paths.remove(path)
+                    self.loaded.emit(icon)
 
         # BatchImageLoaderとのI/F統一のためAsyncResultを返したいから1スレッドだけのプールを生成する
         def _load(paths):
-            for name, iconImage in getFileIcons(paths).items():
+            # ファイルアイコンは拡張子単位で変動する
+            for filePath, iconImage in getFileIcons(paths, by_extention=True).items():
                 icon = QIcon(QPixmap.fromImage(iconImage))
-                self.__icons[name] = icon
+                _, ext = os.path.splitext(filePath)
+                self.__icons[ext] = icon
                 self.loaded.emit(icon)
+                print(f'load: {ext}')
             self.completed.emit()
 
         return self.__pool.map_async(
             _load,
-            [[path.as_posix() for path in self.__paths]],
-            # callback=lambda: self.completed.emit()
+            [[path.as_posix() for path in paths]],
         )
