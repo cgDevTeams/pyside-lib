@@ -1,6 +1,14 @@
 # coding: utf-8
+import os
+import sys
 import threading
 import multiprocessing.pool
+import subprocess
+import tempfile
+import json
+import shutil
+import glob
+import pathlib
 
 from typing import (
     NoReturn,
@@ -10,6 +18,7 @@ from typing import (
     List,
     Dict,
     Tuple,
+    Union,
 )
 
 from PySide2.QtCore import (
@@ -21,6 +30,8 @@ from PySide2.QtCore import (
 
 from PySide2.QtGui import (
     QImage,
+    QIcon,
+    QPixmap,
 )
 
 
@@ -137,3 +148,110 @@ class BatchImageLoader(QObject):
                 self.__images[index] = newImage
 
         self.loaded.emit(index)
+
+
+def getFileIcons(filePaths):
+    # type: (List[Union[str, pathlib.Path]]) -> Dict[str, QImage]
+    if os.name == 'nt':
+        platform = 'win10-x64'
+    else:
+        raise NotImplementedError()
+
+    executerPath = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'tools', 'IconExtractor', 'build', platform, 'IconExtractor.exe'))
+
+    outputPath = pathlib.Path(os.path.join(tempfile.gettempdir(), '_icon_tmp'))
+    if outputPath.is_dir():
+        shutil.rmtree(outputPath.as_posix())
+    os.makedirs(outputPath.as_posix())
+
+    filePaths = [path.as_posix() if isinstance(path, pathlib.Path) else path for path in filePaths]
+    args = {
+        'input': filePaths,
+        'output': outputPath.as_posix(),
+        'by-extension': True,
+    }
+
+    argsFilePath = os.path.join(tempfile.gettempdir(), '_create_icons_args.txt')
+    with open(argsFilePath, 'w') as f:
+        f.write(json.dumps(args))
+
+    try:
+        proc = subprocess.Popen(
+            [executerPath, '--file', argsFilePath],
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+    except Exception as e:
+        # TODO: エラーハンドリング
+        print(e)
+        return {}
+
+    stdout, stderr = proc.communicate()
+    if len(stderr) > 0:
+        # TODO: エラーハンドリング
+        if platform == 'win10-x64':
+            print(stderr.decode('shift-jis'))
+        else:
+            print(stderr.decode(sys.getdefaultencoding()))
+        return {}
+
+    icons = {}  # type: Dict[str, QIcon]
+    for iconFilePath in glob.iglob(os.path.join(outputPath, '.*.png')):
+        ext = os.path.basename(iconFilePath)[:-len('.png')]
+        icons[ext] = QImage(iconFilePath)
+
+    outputs = {}  # type: Dict[str, QIcon]
+    for filePath in filePaths:
+        _, ext = os.path.splitext(filePath)
+        outputs[filePath] = icons.get(ext)
+
+    shutil.rmtree(outputPath)
+
+    return outputs
+
+
+class QFileIconLoader(QObject):
+
+    loaded = Signal(QIcon)
+    completed = Signal()
+
+    def __init__(self, parent):
+        # type: (QObject) -> NoReturn
+        super(QFileIconLoader, self).__init__(parent)
+        self.__paths = []  # type: List[pathlib.Path]
+        self.__icons = {}  # type: Dict[pathlib.Path, QIcon]
+        self.__pool = multiprocessing.pool.ThreadPool(processes=1)
+
+    def addEntry(self, filePath):
+        # type: (Union[str, pathlib.Path]) -> NoReturn
+        if isinstance(filePath, str):
+            filePath = pathlib.Path(filePath)
+        self.__paths.append(filePath)
+
+    def icon(self, name):
+        # type: (str) -> Optional[QIcon]
+        return self.__icons.get(name)
+
+    def load_async(self, useCache=True):
+        # type: (bool) -> multiprocessing.pool.AsyncResult
+        paths = self.__paths.copy()
+        if useCache:
+            for path in self.__paths:
+                icon = self.__icons.get(path.name)
+                if icon is not None:
+                    paths.remove(path)
+
+        # BatchImageLoaderとのI/F統一のためAsyncResultを返したいから1スレッドだけのプールを生成する
+        def _load(paths):
+            for name, iconImage in getFileIcons(paths).items():
+                icon = QIcon(QPixmap.fromImage(iconImage))
+                self.__icons[name] = icon
+                self.loaded.emit(icon)
+            self.completed.emit()
+
+        return self.__pool.map_async(
+            _load,
+            [[path.as_posix() for path in self.__paths]],
+            # callback=lambda: self.completed.emit()
+        )

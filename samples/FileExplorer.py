@@ -45,6 +45,7 @@ from PySideLib.QCdtWidgets import (
 from PySideLib.QCdtUtils import (
     BatchImageLoader,
     ImageLoadingCallback,
+    QFileIconLoader,
 )
 
 
@@ -72,22 +73,13 @@ class DirTreeWidget(QDirectoryTreeWidget):
 
 class FileListModel(QFileListModel):
 
-    dirIcon = None
-    fileIcon = None
-
-    def createItem(self, path):
-        item = QFileListItem(path)
-        if path.is_dir():
-            icon = FileListModel.dirIcon
-        else:
-            icon = FileListModel.fileIcon
-        item.setIcon(icon)
-        return item
+    icons = {}
 
     def data(self, index, role=Qt.DisplayRole):
         if role == Qt.DecorationRole:
             item = self.itemFromIndex(index)
-            return item.icon()
+            name = item.path().name
+            return FileListModel.icons.get(name)
         return super(FileListModel, self).data(index, role)
 
 
@@ -141,7 +133,29 @@ def main():
     files.itemClicked.connect(lambda idx: print(f'click: {idx}'))
     files.itemDoubleClicked.connect(lambda idx: print(f'doubleclick: {idx}'))
 
-    tree.itemClicked.connect(lambda index: files.setDirectoryPath(tree.itemFromIndex(index).path()))
+    iconLoader = QFileIconLoader(None)
+
+    def _updateFiles(index):
+        item = tree.itemFromIndex(index)
+
+        filePaths = []
+        for path in item.path().glob('*'):
+            iconLoader.addEntry(path)
+            filePaths.append(path)
+
+        def _set_icons():
+            for path in filePaths:
+                icon = iconLoader.icon(path.as_posix()) or DirTreeModel.dirIcon
+                FileListModel.icons[path.name] = icon
+            files.model().refresh()
+
+        iconLoader.completed.connect(_set_icons)
+        iconLoader.loaded.connect(print)
+        iconLoader.load_async(filePaths)
+
+        files.setDirectoryPath(tree.itemFromIndex(index).path())
+
+    tree.itemClicked.connect(_updateFiles)
 
     def _changeDir(index):
         item = files.itemFromIndex(index)

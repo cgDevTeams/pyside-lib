@@ -331,6 +331,10 @@ class QListModel(QAbstractListModel):
         # type: (QModelIndex) -> int
         return len(self.__items)
 
+    def refresh(self):
+        # type: () -> NoReturn
+        self.dataChanged.emit(self.index(0), self.index(self.rowCount()))
+
 
 class QFlowView(QListView):
 
@@ -712,11 +716,13 @@ class QFileListModel(QListModel):
         if isinstance(path, str):
             path = pathlib.Path(path)
 
-        paths = []  # type: Iterable[pathlib.Path]
-        if path.is_dir():
-            paths = path.glob('*')
+        items = []  # type: List[TFileListItem]
+        for dirPath in [p for p in path.glob('*') if p.is_dir()]:
+            items.append(self.createItem(dirPath))
+        for filePath in [p for p in path.glob('*') if p.is_file()]:
+            items.append(self.createItem(filePath))
 
-        self.reset([self.createItem(path) for path in paths])
+        self.reset(items)
 
     def createItem(self, path):
         # type: (pathlib.Path) -> TFileListItem()
