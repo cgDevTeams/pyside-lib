@@ -8,7 +8,7 @@ from PySide2.QtWidgets import (
 )
 
 # Set path to parent directory
-sys.path.append(os.path.abspath(
+sys.path.add(os.path.abspath(
     os.path.dirname(os.path.abspath(__file__)) + "/../"))
 
 # @pytest.fixture

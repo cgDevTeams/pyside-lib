@@ -9,6 +9,11 @@ import json
 import shutil
 import glob
 import pathlib
+import datetime
+import heapq
+import cProfile
+import pstats
+import io
 
 from typing import (
     NoReturn,
@@ -20,6 +25,7 @@ from typing import (
     Dict,
     Tuple,
     Union,
+    Set,
 )
 
 from PySide2.QtCore import (
@@ -152,7 +158,7 @@ class BatchImageLoader(QObject):
 
 
 def getFileIcons(filePaths, by_extention=True):
-    # type: (List[Union[str, pathlib.Path]], bool) -> Dict[str, QImage]
+    # type: (List[Union[str, pathlib.Path]], bool) -> Dict[pathlib.Path, QImage]
     if os.name == 'nt':
         platform = 'win10-x64'
     else:
@@ -203,26 +209,140 @@ def getFileIcons(filePaths, by_extention=True):
         ext = os.path.basename(iconFilePath)[:-len('.png')]
         icons[ext] = QImage(iconFilePath)
 
-    outputs = {}  # type: Dict[str, QIcon]
+    outputs = {}  # type: Dict[pathlib.Path, QIcon]
     for filePath in filePaths:
         _, ext = os.path.splitext(filePath)
-        outputs[filePath] = icons.get(ext)
+        outputs[pathlib.Path(filePath)] = icons.get(ext)
 
     shutil.rmtree(outputPath)
 
     return outputs
 
 
+class LruCacheItem(object):
+
+    @property
+    def key(self):
+        # type: () -> Any
+        return self.__key
+
+    def __init__(self, key, value):
+        # type: (Any, Any) -> NoReturn
+        self.__key = key
+        self.__value = value
+        self.__lastAccessed = datetime.datetime.now()
+
+    def __lt__(self, other):
+        return self.__lastAccessed < other.__lastAccessed
+
+    def touch(self):
+        self.__lastAccessed = datetime.datetime.now()
+
+    def get(self):
+        # type: () -> Any
+        self.touch()
+        return self.__value
+
+    def set(self, value):
+        # type: (Any) -> NoReturn
+        self.__value = value
+        self.touch()
+
+
+class LruCache(object):
+
+    def __init__(self, size):
+        # type: (int) -> NoReturn
+        self.__size = 0
+        self.__items = []  # type: List[LruCacheItem]
+        self.__itemsDic = {}  # type: Dict[Any, LruCacheItem]
+        self.resize(size)
+
+    def resize(self, size):
+        # type: (int) -> NoReturn
+        self.__size = size
+        self.__items.clear()
+        self.__itemsDic.clear()
+
+    def get(self, key, defaultValue=None):
+        # type: (Any, Any) -> Any
+        item = self.__itemsDic.get(key)
+        if item is None:
+            return defaultValue
+        return item.get()
+
+    def add(self, key, value):
+        # type: (Any, Any) -> Optional[Any]
+        item = self.__itemsDic.get(key)
+        if item is not None:
+            item.set(value)
+            return None
+
+        item = LruCacheItem(key, value)
+
+        if len(self.__items) < self.__size:
+            heapq.heappush(self.__items, item)
+            self.__itemsDic[item.key] = item
+            return None
+
+        removed = heapq.heapreplace(self.__items, item)
+        del self.__itemsDic[removed.key]
+        self.__itemsDic[item.key] = item
+        return removed
+
+
+class Scope(object):
+
+    def _enter(self):
+        raise NotImplementedError()
+
+    def _exit(self, exc_type, exc_val, exc_tb):
+        raise NotImplementedError()
+
+    def __enter__(self):
+        self._enter()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._exit(exc_type, exc_val, exc_tb):
+            return True
+        return False
+
+
+class ProfileScope(Scope):
+
+    def __init__(self, sortKey=pstats.SortKey.CUMULATIVE, stream=sys.stdout):
+        # type: (str, io.TextIOBase) -> NoReturn
+        self.__profile = cProfile.Profile()
+        self.__sortKey = sortKey
+        self.__stream = stream
+
+    def _enter(self):
+        self.__profile.enable()
+
+    def _exit(self, exc_type, exc_val, exc_tb):
+        self.__profile.disable()
+        stat = pstats.Stats(self.__profile, stream=self.__stream).sort_stats(self.__sortKey)
+        stat.print_stats()
+
+
 class QFileIconLoader(QObject):
 
-    loaded = Signal(QIcon)
-    completed = Signal()
+    class LoadResult(object):
 
-    def __init__(self, parent):
-        # type: (QObject) -> NoReturn
+        def __init__(self, filePath, icon):
+            # type: (pathlib.Path, QIcon) -> NoReturn
+            self.filePath = filePath
+            self.icon = icon
+
+    loaded = Signal(LoadResult)
+    completed = Signal(dict)
+
+    def __init__(self, parent, cacheSize=1024):
+        # type: (QObject, int) -> NoReturn
         super(QFileIconLoader, self).__init__(parent)
-        self.__paths = []  # type: List[pathlib.Path]
-        self.__icons = {}  # type: Dict[pathlib.Path, QIcon]
+        self.__targetPaths = []  # type: List[pathlib.Path]
+        self.__iconsCache = LruCache(cacheSize)
         self.__pool = multiprocessing.pool.ThreadPool(processes=1)
         self.completed.connect(self.reset)
 
@@ -230,7 +350,8 @@ class QFileIconLoader(QObject):
         # type: (Union[str, pathlib.Path]) -> NoReturn
         if isinstance(filePath, str):
             filePath = pathlib.Path(filePath)
-        self.__paths.append(filePath)
+        if not filePath.is_dir():
+            self.__targetPaths.append(filePath)
 
     def extend(self, filePaths):
         # type: (Iterable[Union[str, pathlib.Path]]) -> NoReturn
@@ -239,45 +360,40 @@ class QFileIconLoader(QObject):
 
     def reset(self, filePaths=[]):
         # type: (Iterable[Union[str, pathlib.Path]]) -> NoReturn
-        self.__paths.clear()
+        self.__targetPaths.clear()
         self.extend(filePaths)
-
-    def icon(self, filePath):
-        # type: (Union[str, pathlib.Path]) -> Optional[QIcon]
-        if isinstance(filePath, str):
-            filePath = pathlib.Path(filePath)
-        if filePath.is_dir():
-            return None
-        return self.__icons.get(filePath.suffix)
 
     def load_async(self, useCache=True):
         # type: (bool) -> multiprocessing.pool.AsyncResult
-        paths = []  # type: List[pathlib.Path]
+        targetPaths = self.__targetPaths.copy()
 
-        # ファイルアイコンを持つのは非ディレクトリだけ
-        for path in self.__paths:
-            if not path.is_dir():
-                paths.append(path)
+        loadedItems = {}  # type: Dict[pathlib.path, QFileIconLoader.LoadResult]
 
         if useCache:
-            for path in self.__paths:
-                icon = self.__icons.get(path.suffix)
-                if icon is not None:
-                    paths.remove(path)
-                    self.loaded.emit(icon)
+            for path in self.__targetPaths:
+                icon = self.__iconsCache.get(path)
+                if icon is None:
+                    continue
+                targetPaths.remove(path)
+                result = QFileIconLoader.LoadResult(path, icon)
+                loadedItems[path] = result
+                self.loaded.emit(result)
 
         # BatchImageLoaderとのI/F統一のためAsyncResultを返したいから1スレッドだけのプールを生成する
         def _load(paths):
-            # ファイルアイコンは拡張子単位で変動する
-            for filePath, iconImage in getFileIcons(paths, by_extention=True).items():
-                icon = QIcon(QPixmap.fromImage(iconImage))
-                _, ext = os.path.splitext(filePath)
-                self.__icons[ext] = icon
-                self.loaded.emit(icon)
-                print(f'load: {ext}')
-            self.completed.emit()
+            if len(paths) > 0:
+                for filePath, iconImage in getFileIcons(paths, by_extention=True).items():
+                    icon = QIcon(QPixmap.fromImage(iconImage))
+                    self.__iconsCache.add(filePath, icon)
+                    result = QFileIconLoader.LoadResult(filePath, icon)
+                    loadedItems[filePath] = result
+                    self.loaded.emit(result)
+            self.completed.emit(loadedItems)
+
+        if len(targetPaths) == 0:
+            self.completed.emit(loadedItems)
 
         return self.__pool.map_async(
             _load,
-            [[path.as_posix() for path in paths]],
+            [[path.as_posix() for path in targetPaths]],
         )

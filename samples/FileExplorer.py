@@ -78,8 +78,10 @@ class FileListModel(QFileListModel):
     def data(self, index, role=Qt.DisplayRole):
         if role == Qt.DecorationRole:
             item = self.itemFromIndex(index)
-            name = item.path().name
-            return FileListModel.icons.get(name)
+            path = item.path()
+            if path.is_dir():
+                return DirTreeModel.dirIcon
+            return FileListModel.icons.get(path)
         return super(FileListModel, self).data(index, role)
 
 
@@ -95,8 +97,6 @@ def main():
     window.setMinimumSize(600, 600)
 
     DirTreeModel.dirIcon = QIcon(os.path.join(os.path.dirname(__file__), 'resources', 'Folder_16x.png'))
-    FileListModel.dirIcon = QIcon(os.path.join(os.path.dirname(__file__), 'resources', 'Folder_16x.png'))
-    FileListModel.fileIcon = QIcon(os.path.join(os.path.dirname(__file__), 'resources', 'FileSystemEditor_16x.png'))
 
     tree = DirTreeWidget(window)
     tree.setRootDirectoryPaths(['C:\\', 'D:\\'])
@@ -129,9 +129,9 @@ def main():
     files = FileListWidget(window)
     files.setViewMode(QFileListViewMode.ListMode)
     files.setSelectionMode(QAbstractItemView.ExtendedSelection)
-    files.itemSelectionChanged.connect(lambda x, y: print(tree.selectedItems()))
-    files.itemClicked.connect(lambda idx: print(f'click: {idx}'))
-    files.itemDoubleClicked.connect(lambda idx: print(f'doubleclick: {idx}'))
+    # files.itemSelectionChanged.connect(lambda x, y: print(tree.selectedItems()))
+    # files.itemClicked.connect(lambda idx: print(f'click: {idx}'))
+    # files.itemDoubleClicked.connect(lambda idx: print(f'doubleclick: {idx}'))
 
     iconLoader = QFileIconLoader(None)
 
@@ -141,10 +141,9 @@ def main():
         filePaths = list(item.path().glob('*'))
         iconLoader.reset(filePaths)
 
-        def _set_icons():
-            for path in filePaths:
-                icon = iconLoader.icon(path.as_posix()) or DirTreeModel.dirIcon
-                FileListModel.icons[path.name] = icon
+        def _set_icons(result):
+            for path, item in result.items():
+                FileListModel.icons[path] = item.icon
             files.model().refresh()
 
         iconLoader.completed.connect(_set_icons)
@@ -153,6 +152,7 @@ def main():
 
         files.setDirectoryPath(tree.itemFromIndex(index).path())
 
+    tree.itemSelectionChanged.connect(lambda x, y: _updateFiles(tree.selectedIndexes()[0]))
     tree.itemClicked.connect(_updateFiles)
 
     def _changeDir(index):

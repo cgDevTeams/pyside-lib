@@ -622,6 +622,10 @@ class QDirectoryTreeWidget(_ViewModelWidgetBase):
         # type: (ContextMenuPolicy) -> NoReturn
         self._view.setContextMenuPolicy(policy)
 
+    def selectedIndexes(self):
+        # type: () -> List[QModelIndex]
+        return self._view.selectedIndexes()
+
     def itemFromIndex(self, index):
         # type: (QModelIndex) -> TDirectoryTreeItem
         model = self.model()
@@ -637,7 +641,7 @@ class QDirectoryTreeWidget(_ViewModelWidgetBase):
 
     def selectedItems(self):
         # type: () -> List[TDirectoryTreeItem]
-        return [self.itemFromIndex(index) for index in self._view.selectedIndexes()]
+        return [self.itemFromIndex(index) for index in self.selectedIndexes()]
 
     def setRootDirectoryPaths(self, paths):
         # type: (List[Union[str, pathlib.Path]]) -> NoReturn
