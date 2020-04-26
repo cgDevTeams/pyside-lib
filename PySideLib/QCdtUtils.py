@@ -16,6 +16,7 @@ import pstats
 import io
 import collections
 import functools
+import contextlib
 
 from typing import (
     NoReturn,
@@ -212,47 +213,24 @@ class LruCache(object):
         return removed
 
 
-class Scope(object):
-
-    def _enter(self):
-        raise NotImplementedError()
-
-    def _exit(self, exc_type, exc_val, exc_tb):
-        raise NotImplementedError()
-
-    def __enter__(self):
-        self._enter()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self._exit(exc_type, exc_val, exc_tb):
-            return True
-        return False
+@contextlib.contextmanager
+def profileCtx(sortKey=pstats.SortKey.CUMULATIVE, stream=sys.stdout):
+    profile = cProfile.Profile()
+    profile.enable()
+    yield
+    profile.disable()
+    stat = pstats.Stats(profile, stream=stream).sort_stats(sortKey)
+    stat.print_stats()
 
 
-class ProfileScope(Scope):
-
-    def __init__(self, sortKey=pstats.SortKey.CUMULATIVE, stream=sys.stdout):
-        # type: (str, io.TextIOBase) -> NoReturn
-        self.__profile = cProfile.Profile()
-        self.__sortKey = sortKey
-        self.__stream = stream
-
-    def _enter(self):
-        self.__profile.enable()
-
-    def _exit(self, exc_type, exc_val, exc_tb):
-        self.__profile.disable()
-        stat = pstats.Stats(self.__profile, stream=self.__stream).sort_stats(self.__sortKey)
-        stat.print_stats()
-
-
-def profile_scope(func):
-    @functools.wraps(func)
-    def _with_profile(*args, **kwargs):
-        with ProfileScope():
-            func(*args, **kwargs)
-    return _with_profile
+def profile(sortKey=pstats.SortKey.CUMULATIVE, stream=sys.stdout):
+    def _deco(func):
+        @functools.wraps(func)
+        def _with_profile(*args, **kwargs):
+            with profileCtx(sortKey, stream):
+                return func(*args, **kwargs)
+        return _with_profile
+    return _deco
 
 
 class QFileIconLoader(QObject):
