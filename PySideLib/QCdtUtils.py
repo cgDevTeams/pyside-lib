@@ -14,6 +14,7 @@ import heapq
 import cProfile
 import pstats
 import io
+import collections
 
 from typing import (
     NoReturn,
@@ -219,49 +220,29 @@ def getFileIcons(filePaths, by_extention=True):
     return outputs
 
 
-class LruCacheItem(object):
-
-    @property
-    def key(self):
-        # type: () -> Any
-        return self.__key
-
-    def __init__(self, key, value):
-        # type: (Any, Any) -> NoReturn
-        self.__key = key
-        self.__value = value
-        self.__lastAccessed = datetime.datetime.now()
-
-    def __lt__(self, other):
-        return self.__lastAccessed < other.__lastAccessed
-
-    def touch(self):
-        self.__lastAccessed = datetime.datetime.now()
-
-    def get(self):
-        # type: () -> Any
-        self.touch()
-        return self.__value
-
-    def set(self, value):
-        # type: (Any) -> NoReturn
-        self.__value = value
-        self.touch()
-
-
 class LruCache(object):
 
     def __init__(self, size):
         # type: (int) -> NoReturn
         self.__size = 0
-        self.__items = []  # type: List[LruCacheItem]
-        self.__itemsDic = {}  # type: Dict[Any, LruCacheItem]
+        self.__itemsDic = collections.OrderedDict()
         self.resize(size)
+
+    def __getitem__(self, item):
+        # type: (Any) -> Any
+        return self.__itemsDic[item]
+
+    def __setitem__(self, key, value):
+        # type: (Any, Any) -> NoReturn
+        self.set(key, value)
+
+    def size(self):
+        # type: () -> int
+        return self.__size
 
     def resize(self, size):
         # type: (int) -> NoReturn
         self.__size = size
-        self.__items.clear()
         self.__itemsDic.clear()
 
     def get(self, key, defaultValue=None):
@@ -269,25 +250,19 @@ class LruCache(object):
         item = self.__itemsDic.get(key)
         if item is None:
             return defaultValue
-        return item.get()
 
-    def add(self, key, value):
+        self.__itemsDic.move_to_end(key)
+        return item
+
+    def set(self, key, value):
         # type: (Any, Any) -> Optional[Any]
-        item = self.__itemsDic.get(key)
-        if item is not None:
-            item.set(value)
+        if key in self.__itemsDic:
+            self.__itemsDic[key] = value
+            self.__itemsDic.move_to_end(key)
             return None
 
-        item = LruCacheItem(key, value)
-
-        if len(self.__items) < self.__size:
-            heapq.heappush(self.__items, item)
-            self.__itemsDic[item.key] = item
-            return None
-
-        removed = heapq.heapreplace(self.__items, item)
-        del self.__itemsDic[removed.key]
-        self.__itemsDic[item.key] = item
+        removed = self.__itemsDic.pop(0) if len(self.__itemsDic) >= self.size() else None
+        self.__itemsDic[key] = value
         return removed
 
 
@@ -384,7 +359,7 @@ class QFileIconLoader(QObject):
             if len(paths) > 0:
                 for filePath, iconImage in getFileIcons(paths, by_extention=True).items():
                     icon = QIcon(QPixmap.fromImage(iconImage))
-                    self.__iconsCache.add(filePath, icon)
+                    self.__iconsCache.set(filePath, icon)
                     result = QFileIconLoader.LoadResult(filePath, icon)
                     loadedItems[filePath] = result
                     self.loaded.emit(result)
