@@ -1,16 +1,8 @@
 # coding: utf-8
-import os
 import sys
 import threading
 import multiprocessing.pool
-import subprocess
-import tempfile
-import json
-import shutil
-import glob
 import pathlib
-import datetime
-import heapq
 import cProfile
 import pstats
 import io
@@ -44,12 +36,10 @@ from PySide2.QtCore import (
 from PySide2.QtGui import (
     QImage,
     QIcon,
-    QPixmap,
 )
 
 from PySide2.QtWidgets import (
     QFileIconProvider,
-    QApplication,
 )
 
 
@@ -221,11 +211,11 @@ class LruCache(Generic[TCacheKey, TCacheValue]):
 @contextlib.contextmanager
 def profileCtx(sortKey=pstats.SortKey.CUMULATIVE, stream=sys.stdout):
     # type: (str, io.TextIOBase) -> NoReturn
-    profile = cProfile.Profile()
-    profile.enable()
+    profiler = cProfile.Profile()
+    profiler.enable()
     yield
-    profile.disable()
-    stat = pstats.Stats(profile, stream=stream).sort_stats(sortKey)
+    profiler.disable()
+    stat = pstats.Stats(profiler, stream=stream).sort_stats(sortKey)
     stat.print_stats()
 
 

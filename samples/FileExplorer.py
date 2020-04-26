@@ -1,33 +1,16 @@
 # coding: utf-8
-import sys
-import os
-import glob
 import subprocess
-import pathlib
 
 from PySide2.QtCore import (
     Qt,
-    QSize,
-    QSortFilterProxyModel,
-)
-
-from PySide2.QtGui import (
-    QIcon,
 )
 
 from PySide2.QtWidgets import (
     QApplication,
     QMainWindow,
-    QWidget,
-    QLineEdit,
-    QVBoxLayout,
-    QMessageBox,
-    QSizePolicy,
-    QHBoxLayout,
     QAbstractItemView,
     QMenu,
     QSplitter,
-    QListView,
     QFileIconProvider,
 )
 
@@ -44,8 +27,6 @@ from PySideLib.QCdtWidgets import (
 )
 
 from PySideLib.QCdtUtils import (
-    BatchImageLoader,
-    ImageLoadingCallback,
     QFileIconLoader,
 )
 
@@ -148,16 +129,12 @@ def main():
         filePaths = list(item.path().glob('*'))
         iconLoader.reset(filePaths)
 
-        # def _set_icons(result):
-        #     for path, item in result.items():
-        #         FileListModel.icons[path] = item.icon
-        #     files.model().refresh()
         def _set_icon(result):
             FileListModel.icons[result.filePath] = result.icon
             files.model().refresh()
 
-        # iconLoader.completed.connect(_set_icons)
         iconLoader.loaded.connect(_set_icon)
+        # iconLoader.completed.connect(print)
         iconLoader.load_async(filePaths)
 
         files.setDirectoryPath(tree.itemFromIndex(index).path())
