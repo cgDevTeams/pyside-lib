@@ -81,7 +81,7 @@ class FileListModel(QFileListModel):
             path = item.path()
             if path.is_dir():
                 return DirTreeModel.dirIcon
-            return FileListModel.icons.get(path)
+            return FileListModel.icons.get(path.as_posix())
         return super(FileListModel, self).data(index, role)
 
 
@@ -143,11 +143,11 @@ def main():
 
         def _set_icons(result):
             for path, item in result.items():
-                FileListModel.icons[path] = item.icon
+                FileListModel.icons[path.as_posix()] = item.icon
             files.model().refresh()
 
         iconLoader.completed.connect(_set_icons)
-        # iconLoader.loaded.connect(print)
+        iconLoader.loaded.connect(print)
         iconLoader.load_async(filePaths)
 
         files.setDirectoryPath(tree.itemFromIndex(index).path())

@@ -1,4 +1,0 @@
-[submodule "tools/IconExtractor"]
-	path = tools/IconExtractor
-	url = https://github.com/cgDevTeams/IconExtractor
-	branch = master

@@ -34,12 +34,19 @@ from PySide2.QtCore import (
     Signal,
     QEvent,
     QCoreApplication,
+    QMimeDatabase,
+    QFileInfo,
 )
 
 from PySide2.QtGui import (
     QImage,
     QIcon,
     QPixmap,
+)
+
+from PySide2.QtWidgets import (
+    QFileIconProvider,
+    QApplication,
 )
 
 
@@ -156,68 +163,6 @@ class BatchImageLoader(QObject):
                 self.__images[index] = newImage
 
         self.loaded.emit(index)
-
-
-def getFileIcons(filePaths, by_extention=True):
-    # type: (List[Union[str, pathlib.Path]], bool) -> Dict[pathlib.Path, QImage]
-    if os.name == 'nt':
-        platform = 'win10-x64'
-    else:
-        # TODO: Mac/Linux対応
-        raise NotImplementedError('update submodule "IconExtractor" and build for your platform!')
-
-    executerPath = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'tools', 'IconExtractor', 'build', platform, 'IconExtractor.exe'))
-
-    outputPath = pathlib.Path(os.path.join(tempfile.gettempdir(), '_icon_tmp'))
-    if outputPath.is_dir():
-        shutil.rmtree(outputPath.as_posix())
-    os.makedirs(outputPath.as_posix())
-
-    filePaths = [path.as_posix() if isinstance(path, pathlib.Path) else path for path in filePaths]
-    args = {
-        'input': filePaths,
-        'output': outputPath.as_posix(),
-        'by-extension': by_extention,
-    }
-
-    argsFilePath = os.path.join(tempfile.gettempdir(), '_create_icons_args.txt')
-    with open(argsFilePath, 'w') as f:
-        f.write(json.dumps(args))
-
-    try:
-        proc = subprocess.Popen(
-            [executerPath, '--file', argsFilePath],
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-    except Exception as e:
-        # TODO: エラーハンドリング
-        print(e)
-        return {}
-
-    stdout, stderr = proc.communicate()
-    if len(stderr) > 0:
-        # TODO: エラーハンドリング
-        if platform == 'win10-x64':
-            print(stderr.decode('shift-jis'))
-        else:
-            print(stderr.decode(sys.getdefaultencoding()))
-        return {}
-
-    icons = {}  # type: Dict[str, QIcon]
-    for iconFilePath in glob.iglob(os.path.join(outputPath, '.*.png')):
-        ext = os.path.basename(iconFilePath)[:-len('.png')]
-        icons[ext] = QImage(iconFilePath)
-
-    outputs = {}  # type: Dict[pathlib.Path, QIcon]
-    for filePath in filePaths:
-        _, ext = os.path.splitext(filePath)
-        outputs[pathlib.Path(filePath)] = icons.get(ext)
-
-    shutil.rmtree(outputPath)
-
-    return outputs
 
 
 class LruCache(object):
@@ -354,21 +299,37 @@ class QFileIconLoader(QObject):
                 loadedItems[path] = result
                 self.loaded.emit(result)
 
-        # BatchImageLoaderとのI/F統一のためAsyncResultを返したいから1スレッドだけのプールを生成する
-        def _load(paths):
-            if len(paths) > 0:
-                for filePath, iconImage in getFileIcons(paths, by_extention=True).items():
-                    icon = QIcon(QPixmap.fromImage(iconImage))
-                    self.__iconsCache.set(filePath, icon)
-                    result = QFileIconLoader.LoadResult(filePath, icon)
-                    loadedItems[filePath] = result
-                    self.loaded.emit(result)
-            self.completed.emit(loadedItems)
+        itemsLock = threading.Lock()
 
-        if len(targetPaths) == 0:
-            self.completed.emit(loadedItems)
+        def _load(filePath):
+            # type: (pathlib.Path) -> NoReturn
+            posixPath = filePath.as_posix()
+
+            icon = self.__iconsCache.get(posixPath)
+            if icon is None:
+                file = QFileInfo(posixPath)
+                icon = QFileIconProvider().icon(file)
+
+                if icon.isNull():
+                    mimeDb = QMimeDatabase()
+                    for mime in mimeDb.mimeTypesForFileName(posixPath):
+                        icon = QIcon.fromTheme(mime.iconName())
+                        if not icon.isNull():
+                            break
+
+            self.__iconsCache.set(posixPath, icon)
+
+            result = QFileIconLoader.LoadResult(filePath, icon)
+
+            with itemsLock:
+                loadedItems[filePath] = result
+
+            self.loaded.emit(result)
+
+            if len(loadedItems) == len(targetPaths):
+                self.completed.emit(loadedItems)
 
         return self.__pool.map_async(
             _load,
-            [[path.as_posix() for path in targetPaths]],
+            targetPaths,
         )
