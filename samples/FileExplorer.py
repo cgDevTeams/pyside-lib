@@ -79,9 +79,7 @@ class FileListModel(QFileListModel):
         if role == Qt.DecorationRole:
             item = self.itemFromIndex(index)
             path = item.path()
-            if path.is_dir():
-                return DirTreeModel.dirIcon
-            return FileListModel.icons.get(path.as_posix())
+            return FileListModel.icons.get(path)
         return super(FileListModel, self).data(index, role)
 
 
@@ -143,7 +141,7 @@ def main():
 
         def _set_icons(result):
             for path, item in result.items():
-                FileListModel.icons[path.as_posix()] = item.icon
+                FileListModel.icons[path] = item.icon
             files.model().refresh()
 
         iconLoader.completed.connect(_set_icons)

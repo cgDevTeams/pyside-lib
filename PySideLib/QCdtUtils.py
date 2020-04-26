@@ -15,6 +15,7 @@ import cProfile
 import pstats
 import io
 import collections
+import functools
 
 from typing import (
     NoReturn,
@@ -246,6 +247,14 @@ class ProfileScope(Scope):
         stat.print_stats()
 
 
+def profile_scope(func):
+    @functools.wraps(func)
+    def _with_profile(*args, **kwargs):
+        with ProfileScope():
+            func(*args, **kwargs)
+    return _with_profile
+
+
 class QFileIconLoader(QObject):
 
     class LoadResult(object):
@@ -270,8 +279,7 @@ class QFileIconLoader(QObject):
         # type: (Union[str, pathlib.Path]) -> NoReturn
         if isinstance(filePath, str):
             filePath = pathlib.Path(filePath)
-        if not filePath.is_dir():
-            self.__targetPaths.append(filePath)
+        self.__targetPaths.append(filePath)
 
     def extend(self, filePaths):
         # type: (Iterable[Union[str, pathlib.Path]]) -> NoReturn
@@ -303,10 +311,9 @@ class QFileIconLoader(QObject):
 
         def _load(filePath):
             # type: (pathlib.Path) -> NoReturn
-            posixPath = filePath.as_posix()
-
-            icon = self.__iconsCache.get(posixPath)
+            icon = self.__iconsCache.get(filePath)
             if icon is None:
+                posixPath = filePath.as_posix()
                 file = QFileInfo(posixPath)
                 icon = QFileIconProvider().icon(file)
 
@@ -317,7 +324,7 @@ class QFileIconLoader(QObject):
                         if not icon.isNull():
                             break
 
-            self.__iconsCache.set(posixPath, icon)
+            self.__iconsCache.set(filePath, icon)
 
             result = QFileIconLoader.LoadResult(filePath, icon)
 
