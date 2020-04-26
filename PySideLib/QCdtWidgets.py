@@ -562,9 +562,15 @@ class QDirectoryTreeModel(QStandardItemModel):
 
     def setRootDirectoryPaths(self, paths):
         # type: (List[Union[str, pathlib.Path]]) -> NoReturn
+        rootPaths = []
+        for path in paths:
+            if isinstance(path, str):
+                path = pathlib.Path(path)
+            rootPaths.append(path)
+
         item = self.invisibleRootItem()
         item.removeRows(0, item.rowCount())
-        item.appendRows([self.createItem(path) for path in paths])
+        item.appendRows([self.createItem(rootPath) for rootPath in rootPaths])
 
     def headerData(self, section, orientation, role):
         # type: (int, int, int) -> str

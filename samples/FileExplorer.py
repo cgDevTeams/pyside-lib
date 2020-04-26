@@ -28,6 +28,7 @@ from PySide2.QtWidgets import (
     QMenu,
     QSplitter,
     QListView,
+    QFileIconProvider,
 )
 
 from PySideLib.QCdtWidgets import (
@@ -51,11 +52,21 @@ from PySideLib.QCdtUtils import (
 
 class DirTreeModel(QDirectoryTreeModel):
 
-    dirIcon = None
+    def __init__(self, parent):
+        super().__init__(parent)
+        iconProvider = QFileIconProvider()
+        self.__defaultIcon = iconProvider.icon(QFileIconProvider.Folder)
+        self.__driveIcon = iconProvider.icon(QFileIconProvider.Drive)
 
     def createItem(self, path):
         item = QDirectoryTreeItem(path)
-        item.setIcon(DirTreeModel.dirIcon)
+
+        if path == path.parent:
+            icon = self.__driveIcon
+        else:
+            icon = self.__defaultIcon
+        item.setIcon(icon)
+
         return item
 
     def data(self, index, role=Qt.DisplayRole):
@@ -93,8 +104,6 @@ def main():
     app = QApplication()
     window = QMainWindow()
     window.setMinimumSize(600, 600)
-
-    DirTreeModel.dirIcon = QIcon(os.path.join(os.path.dirname(__file__), 'resources', 'Folder_16x.png'))
 
     tree = DirTreeWidget(window)
     tree.setRootDirectoryPaths(['C:\\', 'D:\\'])
@@ -139,13 +148,16 @@ def main():
         filePaths = list(item.path().glob('*'))
         iconLoader.reset(filePaths)
 
-        def _set_icons(result):
-            for path, item in result.items():
-                FileListModel.icons[path] = item.icon
+        # def _set_icons(result):
+        #     for path, item in result.items():
+        #         FileListModel.icons[path] = item.icon
+        #     files.model().refresh()
+        def _set_icon(result):
+            FileListModel.icons[result.filePath] = result.icon
             files.model().refresh()
 
-        iconLoader.completed.connect(_set_icons)
-        iconLoader.loaded.connect(print)
+        # iconLoader.completed.connect(_set_icons)
+        iconLoader.loaded.connect(_set_icon)
         iconLoader.load_async(filePaths)
 
         files.setDirectoryPath(tree.itemFromIndex(index).path())

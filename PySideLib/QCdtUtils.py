@@ -313,9 +313,11 @@ class QFileIconLoader(QObject):
             # type: (pathlib.Path) -> NoReturn
             icon = self.__iconsCache.get(filePath)
             if icon is None:
+                iconProvider = QFileIconProvider()
+
                 posixPath = filePath.as_posix()
                 file = QFileInfo(posixPath)
-                icon = QFileIconProvider().icon(file)
+                icon = iconProvider.icon(file)
 
                 if icon.isNull():
                     mimeDb = QMimeDatabase()
