@@ -19,6 +19,8 @@ import functools
 import contextlib
 
 from typing import (
+    TypeVar,
+    Generic,
     NoReturn,
     Optional,
     Callable,
@@ -28,7 +30,6 @@ from typing import (
     Dict,
     Tuple,
     Union,
-    Set,
 )
 
 from PySide2.QtCore import (
@@ -167,7 +168,11 @@ class BatchImageLoader(QObject):
         self.loaded.emit(index)
 
 
-class LruCache(object):
+TCacheKey = TypeVar('TCacheKey')
+TCacheValue = TypeVar('TCacheValue')
+
+
+class LruCache(Generic[TCacheKey, TCacheValue]):
 
     def __init__(self, size):
         # type: (int) -> NoReturn
@@ -176,11 +181,11 @@ class LruCache(object):
         self.resize(size)
 
     def __getitem__(self, item):
-        # type: (Any) -> Any
+        # type: (TCacheKey) -> Any
         return self.__itemsDic[item]
 
     def __setitem__(self, key, value):
-        # type: (Any, Any) -> NoReturn
+        # type: (TCacheKey, TCacheValue) -> NoReturn
         self.set(key, value)
 
     def size(self):
@@ -193,7 +198,7 @@ class LruCache(object):
         self.__itemsDic.clear()
 
     def get(self, key, defaultValue=None):
-        # type: (Any, Any) -> Any
+        # type: (TCacheKey, TCacheValue) -> TCacheValue
         item = self.__itemsDic.get(key)
         if item is None:
             return defaultValue
@@ -202,7 +207,7 @@ class LruCache(object):
         return item
 
     def set(self, key, value):
-        # type: (Any, Any) -> Optional[Any]
+        # type: (TCacheKey, TCacheValue) -> Optional[TCacheValue]
         if key in self.__itemsDic:
             self.__itemsDic[key] = value
             self.__itemsDic.move_to_end(key)
@@ -215,6 +220,7 @@ class LruCache(object):
 
 @contextlib.contextmanager
 def profileCtx(sortKey=pstats.SortKey.CUMULATIVE, stream=sys.stdout):
+    # type: (str, io.TextIOBase) -> NoReturn
     profile = cProfile.Profile()
     profile.enable()
     yield
@@ -224,6 +230,7 @@ def profileCtx(sortKey=pstats.SortKey.CUMULATIVE, stream=sys.stdout):
 
 
 def profile(sortKey=pstats.SortKey.CUMULATIVE, stream=sys.stdout):
+    # type: (str, io.TextIOBase) -> Callable
     def _deco(func):
         @functools.wraps(func)
         def _with_profile(*args, **kwargs):
@@ -249,7 +256,7 @@ class QFileIconLoader(QObject):
         # type: (QObject, int) -> NoReturn
         super(QFileIconLoader, self).__init__(parent)
         self.__targetPaths = []  # type: List[pathlib.Path]
-        self.__iconsCache = LruCache(cacheSize)
+        self.__iconsCache = LruCache(cacheSize)  # type: LruCache[pathlib.Path, QIcon]
         self.__pool = multiprocessing.pool.ThreadPool(processes=1)
         self.completed.connect(self.reset)
 
@@ -289,7 +296,9 @@ class QFileIconLoader(QObject):
 
         def _load(filePath):
             # type: (pathlib.Path) -> NoReturn
-            icon = self.__iconsCache.get(filePath)
+            with itemsLock:
+                icon = self.__iconsCache.get(filePath)
+
             if icon is None:
                 iconProvider = QFileIconProvider()
 
@@ -304,12 +313,10 @@ class QFileIconLoader(QObject):
                         if not icon.isNull():
                             break
 
-            self.__iconsCache.set(filePath, icon)
-
             result = QFileIconLoader.LoadResult(filePath, icon)
-
             with itemsLock:
                 loadedItems[filePath] = result
+                self.__iconsCache.set(filePath, icon)
 
             self.loaded.emit(result)
 
