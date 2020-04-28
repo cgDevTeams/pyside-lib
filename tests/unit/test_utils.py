@@ -10,6 +10,7 @@ from PySide2.QtGui import (
 from PySideLib.QCdtUtils import (
     BatchImageLoader,
     ImageLoadingCallback,
+    LruCache,
 )
 
 
@@ -81,3 +82,42 @@ class TestBatchImageLoader(object):
     #
     #     loader.addCallback(ImageLoadingCallback.ERROR, _assert_error)
     #     loader.loadAsync().get()
+
+
+class TestLruCache(object):
+
+    def test_add(self):
+        cache = LruCache(size=3)
+
+        cache.set('key1', 1)
+        assert cache.get('key1') == 1
+
+        cache.set('key2', 2)
+        assert cache.get('key2') == 2
+
+        cache.set('key3', 3)
+        assert cache.get('key3') == 3
+
+    def test_overflow(self):
+        cache = LruCache(size=3)
+        cache.set('key1', 1)
+        cache.set('key2', 2)
+        cache.set('key3', 3)
+        assert cache.size() == 3
+
+        # add key4, key1 is removed
+        cache.set('key4', 4)
+        assert cache.size() == 3
+        assert cache.get('key1') is None
+        assert cache.get('key2') == 2
+        assert cache.get('key3') == 3
+        assert cache.get('key4') == 4
+
+        # touch key2
+        cache.get('key2')
+        # add key5, key3 is removed
+        cache.set('key5', 5)
+        assert cache.get('key3') is None
+        assert cache.get('key2') == 2
+        assert cache.get('key4') == 4
+        assert cache.get('key5') == 5

@@ -203,7 +203,7 @@ class LruCache(Generic[TCacheKey, TCacheValue]):
             self.__itemsDic.move_to_end(key)
             return None
 
-        removed = self.__itemsDic.pop(0) if len(self.__itemsDic) >= self.size() else None
+        removed = self.__itemsDic.popitem(last=False) if len(self.__itemsDic) >= self.size() else None
         self.__itemsDic[key] = value
         return removed
 
