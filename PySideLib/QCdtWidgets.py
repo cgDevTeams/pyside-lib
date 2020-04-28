@@ -1,18 +1,15 @@
-"""
-"""
-import os
+# coding: utf-8
 import pathlib
 from functools import partial
 
 from typing import (
     TypeVar,
     NoReturn,
-    Optional,
     Generic,
+    Optional,
+    Union,
     Any,
     List,
-    Union,
-    Iterable,
 )
 
 from PySide2.QtCore import (
@@ -52,6 +49,7 @@ from PySide2.QtGui import (
     QImage,
     QStandardItem,
     QStandardItemModel,
+    QMouseEvent,
 )
 
 
@@ -215,13 +213,13 @@ class QFlowLayout(QLayout):
         return len(self.itemList)
 
     def itemAt(self, index):
-        if index >= 0 and index < len(self.itemList):
+        if 0 <= index < len(self.itemList):
             return self.itemList[index]
 
         return None
 
     def takeAt(self, index):
-        if index >= 0 and index < len(self.itemList):
+        if 0 <= index < len(self.itemList):
             return self.itemList.pop(index)
 
         return None
@@ -353,17 +351,17 @@ class QFlowDirection(object):
     TopToBottom = 'TopToBottom'
 
 
-class QImageFlowModelItem(object):
+class QImageFlowItem(object):
 
     def __init__(self):
-        self.__image = None  # type: QImage
+        self.__image = None  # type: Optional[QImage]
 
     def setImage(self, image):
         # type: (QImage) -> NoReturn
         self.__image = image
 
     def image(self):
-        # type: () -> QImage
+        # type: () -> Optional[QImage]
         return self.__image
 
 
@@ -375,7 +373,10 @@ class QImageFlowView(QFlowView):
         self.setViewMode(QListView.IconMode)
 
 
-class QImageFlowModel(QListModel):
+TImageFlowItem = TypeVar('TImageFlowItem', bound=QImageFlowItem)
+
+
+class QImageFlowModel(QListModel, Generic[TImageFlowItem]):
 
     def data(self, index, role=Qt.DisplayRole):
         # type: (QModelIndex, int) -> Any
@@ -470,7 +471,7 @@ class QImageFlowWidget(_ViewModelWidgetBase, Generic[TImageFlowView, TImageFlowM
         self.view().setModel(proxy)
 
     def appendItem(self, item):
-        # type: (TImageFlowModelItem) -> TImageFlowModelItem
+        # type: (TImageFlowItem) -> TImageFlowItem
         model = self.model()
         if isinstance(model, QAbstractProxyModel):
             model = model.sourceModel()
@@ -478,13 +479,13 @@ class QImageFlowWidget(_ViewModelWidgetBase, Generic[TImageFlowView, TImageFlowM
         return item
 
     def appendImage(self, image):
-        # type: (QImage) -> TImageFlowModelItem
-        item = QImageFlowModelItem()
+        # type: (QImage) -> TImageFlowItem
+        item = QImageFlowItem()
         item.setImage(image)
         return self.appendItem(item)
 
     def appendFile(self, filePath):
-        # type: (str) -> TImageFlowModelItem
+        # type: (str) -> TImageFlowItem
         image = QImage(filePath)
         return self.appendImage(image)
 
@@ -574,7 +575,7 @@ class QDirectoryTreeModel(QStandardItemModel, Generic[TDirectoryTreeItem]):
         item.appendRows([self.createItem(rootPath) for rootPath in rootPaths])
 
     def headerData(self, section, orientation, role):
-        # type: (int, int, int) -> str
+        # type: (int, Qt.Orientation, int) -> Any
         return ''
 
     def data(self, index, role=Qt.DisplayRole):
@@ -737,7 +738,7 @@ class QFileListModel(QListModel, Generic[TFileListItem]):
         # type: (pathlib.Path) -> TFileListItem
         return QFileListItem(path)
 
-    def data(self, index, role):
+    def data(self, index, role=Qt.DisplayRole):
         # type: (QModelIndex, int) -> Any
         if not index.isValid() or not 0 <= index.row() < self.rowCount():
             return None
@@ -777,7 +778,7 @@ class QFileListWidget(_ViewModelWidgetBase):
         self._view.setSelectionMode(mode)
 
     def setContextMenuPolicy(self, policy):
-        # type: (ContextMenuPolicy) -> NoReturn
+        # type: (Qt.ContextMenuPolicy) -> NoReturn
         self._view.setContextMenuPolicy(policy)
 
     def itemFromIndex(self, index):

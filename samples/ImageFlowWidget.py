@@ -26,7 +26,7 @@ from PySideLib.QCdtWidgets import (
     QImageFlowWidget,
     QImageFlowModel,
     QImageFlowView,
-    QImageFlowModelItem,
+    QImageFlowItem,
 )
 
 from PySideLib.QCdtUtils import (
@@ -35,7 +35,7 @@ from PySideLib.QCdtUtils import (
 )
 
 
-class FlowItem(QImageFlowModelItem):
+class FlowItem(QImageFlowItem):
     def __init__(self, filePath, image=None):
         super(FlowItem, self).__init__()
         self.filePath = filePath
