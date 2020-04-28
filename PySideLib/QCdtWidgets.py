@@ -8,6 +8,7 @@ from typing import (
     TypeVar,
     NoReturn,
     Optional,
+    Generic,
     Any,
     List,
     Union,
@@ -279,7 +280,7 @@ class QFlowLayout(QLayout):
 TListItem = TypeVar('TListItem')
 
 
-class QListModel(QAbstractListModel):
+class QListModel(QAbstractListModel, Generic[TListItem]):
 
     def __init__(self, parent):
         # type: (QObject) -> NoReturn
@@ -424,7 +425,7 @@ TImageFlowView = TypeVar('TImageFlowView', bound=QImageFlowView)
 TImageFlowModel = TypeVar('TImageFlowModel', bound=QImageFlowModel)
 
 
-class QImageFlowWidget(_ViewModelWidgetBase):
+class QImageFlowWidget(_ViewModelWidgetBase, Generic[TImageFlowView, TImageFlowModel]):
 
     def __init__(self, parent):
         # type: (QObject) -> NoReturn
@@ -554,7 +555,7 @@ class QDirectoryTreeView(QTreeView):
         model.expand(index)
 
 
-class QDirectoryTreeModel(QStandardItemModel):
+class QDirectoryTreeModel(QStandardItemModel, Generic[TDirectoryTreeItem]):
 
     def __init__(self, parent):
         # type: (QObject) -> NoReturn
@@ -587,7 +588,7 @@ class QDirectoryTreeModel(QStandardItemModel):
         return item.name()
 
     def createItem(self, path):
-        # type: (pathlib.Path) -> TDirectoryTreeItem()
+        # type: (pathlib.Path) -> TDirectoryTreeItem
         return QDirectoryTreeItem(path)
 
     def expand(self, index):
@@ -601,7 +602,7 @@ TDirectoryTreeView = TypeVar('TDirectoryTreeView', bound=QDirectoryTreeView)
 TDirectoryTreeModel = TypeVar('TDirectoryTreeModel', bound=QDirectoryTreeModel)
 
 
-class QDirectoryTreeWidget(_ViewModelWidgetBase):
+class QDirectoryTreeWidget(_ViewModelWidgetBase, Generic[TDirectoryTreeView, TDirectoryTreeModel]):
 
     itemSelectionChanged = Signal(QItemSelection, QItemSelection)
     itemDoubleClicked = Signal(QModelIndex)
@@ -713,7 +714,7 @@ class QFileListView(QListView):
             return
 
 
-class QFileListModel(QListModel):
+class QFileListModel(QListModel, Generic[TFileListItem]):
 
     def __init__(self, parent):
         # type: (QObject) -> NoReturn
@@ -733,7 +734,7 @@ class QFileListModel(QListModel):
         self.reset(items)
 
     def createItem(self, path):
-        # type: (pathlib.Path) -> TFileListItem()
+        # type: (pathlib.Path) -> TFileListItem
         return QFileListItem(path)
 
     def data(self, index, role):
