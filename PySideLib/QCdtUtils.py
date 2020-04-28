@@ -266,7 +266,7 @@ class QFileIconLoader(QObject):
         self.__targetPaths.clear()
         self.extend(filePaths)
 
-    def load_async(self, useCache=True):
+    def loadAsync(self, useCache=True):
         # type: (bool) -> multiprocessing.pool.AsyncResult
         targetPaths = self.__targetPaths.copy()
 

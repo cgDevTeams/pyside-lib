@@ -88,10 +88,9 @@ def main():
 
     tree = DirTreeWidget(window)
     tree.setRootDirectoryPaths(['C:\\', 'D:\\'])
-    tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
-    tree.itemSelectionChanged.connect(lambda x, y: print(tree.selectedItems()))
-    tree.itemClicked.connect(lambda idx: print(f'click: {idx}'))
-    tree.itemDoubleClicked.connect(lambda idx: print(f'doubleclick: {idx}'))
+    # tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
+    # tree.itemSelectionChanged.connect(lambda x, y: print(tree.selectedItems()))
+    # tree.itemDoubleClicked.connect(lambda idx: print(f'doubleclick: {idx}'))
     tree.setContextMenuPolicy(Qt.CustomContextMenu)
 
     def _ctx_menu(point):
@@ -135,12 +134,11 @@ def main():
 
         iconLoader.loaded.connect(_set_icon)
         # iconLoader.completed.connect(print)
-        iconLoader.load_async(filePaths)
+        iconLoader.loadAsync()
 
         files.setDirectoryPath(tree.itemFromIndex(index).path())
 
     tree.itemSelectionChanged.connect(lambda x, y: _updateFiles(tree.selectedIndexes()[0]))
-    tree.itemClicked.connect(_updateFiles)
 
     def _changeDir(index):
         item = files.itemFromIndex(index)

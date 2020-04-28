@@ -604,7 +604,6 @@ TDirectoryTreeModel = TypeVar('TDirectoryTreeModel', bound=QDirectoryTreeModel)
 class QDirectoryTreeWidget(_ViewModelWidgetBase):
 
     itemSelectionChanged = Signal(QItemSelection, QItemSelection)
-    itemClicked = Signal(QModelIndex)
     itemDoubleClicked = Signal(QModelIndex)
 
     def __init__(self, parent):
@@ -612,7 +611,6 @@ class QDirectoryTreeWidget(_ViewModelWidgetBase):
         super(QDirectoryTreeWidget, self).__init__(parent, QDirectoryTreeView, QDirectoryTreeModel)
         self._view.itemSelectionChanged.connect(self.itemSelectionChanged.emit)
         self._view.customContextMenuRequested.connect(self.customContextMenuRequested.emit)
-        self._view.itemClicked.connect(self.itemClicked.emit)
         self._view.itemDoubleClicked.connect(self.itemDoubleClicked)
 
         layout = QHBoxLayout()
