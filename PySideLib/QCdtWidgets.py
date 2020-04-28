@@ -275,7 +275,7 @@ class QFlowLayout(QLayout):
         return y + lineHeight - rect.y()
 
 
-TListItem = TypeVar('TListItem')
+TListItem = TypeVar('TListItem', bound=QAbstractListModel)
 
 
 class QListModel(QAbstractListModel, Generic[TListItem]):
