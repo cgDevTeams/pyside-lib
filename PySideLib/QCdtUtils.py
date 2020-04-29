@@ -1,15 +1,27 @@
 # coding: utf-8
+import sys
 import threading
 import multiprocessing.pool
+import pathlib
+import cProfile
+import pstats
+import io
+import collections
+import functools
+import contextlib
 
 from typing import (
+    TypeVar,
+    Generic,
     NoReturn,
     Optional,
     Callable,
+    Iterable,
     Any,
     List,
     Dict,
     Tuple,
+    Union,
 )
 
 from PySide2.QtCore import (
@@ -17,10 +29,17 @@ from PySide2.QtCore import (
     Signal,
     QEvent,
     QCoreApplication,
+    QMimeDatabase,
+    QFileInfo,
 )
 
 from PySide2.QtGui import (
     QImage,
+    QIcon,
+)
+
+from PySide2.QtWidgets import (
+    QFileIconProvider,
 )
 
 
@@ -137,3 +156,164 @@ class BatchImageLoader(QObject):
                 self.__images[index] = newImage
 
         self.loaded.emit(index)
+
+
+TCacheKey = TypeVar('TCacheKey')
+TCacheValue = TypeVar('TCacheValue')
+
+
+class LruCache(Generic[TCacheKey, TCacheValue]):
+
+    def __init__(self, size):
+        # type: (int) -> NoReturn
+        self.__size = 0
+        self.__itemsDic = collections.OrderedDict()
+        self.resize(size)
+
+    def __getitem__(self, item):
+        # type: (TCacheKey) -> Any
+        return self.__itemsDic[item]
+
+    def __setitem__(self, key, value):
+        # type: (TCacheKey, TCacheValue) -> NoReturn
+        self.set(key, value)
+
+    def size(self):
+        # type: () -> int
+        return self.__size
+
+    def resize(self, size):
+        # type: (int) -> NoReturn
+        self.__size = size
+        self.__itemsDic.clear()
+
+    def get(self, key, defaultValue=None):
+        # type: (TCacheKey, TCacheValue) -> TCacheValue
+        item = self.__itemsDic.get(key)
+        if item is None:
+            return defaultValue
+
+        self.__itemsDic.move_to_end(key)
+        return item
+
+    def set(self, key, value):
+        # type: (TCacheKey, TCacheValue) -> Optional[TCacheValue]
+        if key in self.__itemsDic:
+            self.__itemsDic[key] = value
+            self.__itemsDic.move_to_end(key)
+            return None
+
+        removed = self.__itemsDic.popitem(last=False) if len(self.__itemsDic) >= self.size() else None
+        self.__itemsDic[key] = value
+        return removed
+
+
+@contextlib.contextmanager
+def profileCtx(sortKey=pstats.SortKey.CUMULATIVE, stream=sys.stdout):
+    # type: (str, io.TextIOBase) -> NoReturn
+    profiler = cProfile.Profile()
+    profiler.enable()
+    yield
+    profiler.disable()
+    stat = pstats.Stats(profiler, stream=stream).sort_stats(sortKey)
+    stat.print_stats()
+
+
+def profile(sortKey=pstats.SortKey.CUMULATIVE, stream=sys.stdout):
+    # type: (str, io.TextIOBase) -> Callable
+    def _deco(func):
+        @functools.wraps(func)
+        def _with_profile(*args, **kwargs):
+            with profileCtx(sortKey, stream):
+                return func(*args, **kwargs)
+        return _with_profile
+    return _deco
+
+
+class QFileIconLoader(QObject):
+
+    class LoadResult(object):
+
+        def __init__(self, filePath, icon):
+            # type: (pathlib.Path, QIcon) -> NoReturn
+            self.filePath = filePath
+            self.icon = icon
+
+    loaded = Signal(LoadResult)
+    completed = Signal(dict)
+
+    def __init__(self, parent, cacheSize=1024):
+        # type: (QObject, int) -> NoReturn
+        super(QFileIconLoader, self).__init__(parent)
+        self.__targetPaths = []  # type: List[pathlib.Path]
+        self.__iconsCache = LruCache(cacheSize)  # type: LruCache[pathlib.Path, QIcon]
+        self.__pool = multiprocessing.pool.ThreadPool(processes=1)
+        self.completed.connect(self.reset)
+
+    def append(self, filePath):
+        # type: (Union[str, pathlib.Path]) -> NoReturn
+        if isinstance(filePath, str):
+            filePath = pathlib.Path(filePath)
+        self.__targetPaths.append(filePath)
+
+    def extend(self, filePaths):
+        # type: (Iterable[Union[str, pathlib.Path]]) -> NoReturn
+        for filePath in filePaths:
+            self.append(filePath)
+
+    def reset(self, filePaths=[]):
+        # type: (Iterable[Union[str, pathlib.Path]]) -> NoReturn
+        self.__targetPaths.clear()
+        self.extend(filePaths)
+
+    def loadAsync(self, useCache=True):
+        # type: (bool) -> multiprocessing.pool.AsyncResult
+        targetPaths = self.__targetPaths.copy()
+
+        loadedItems = {}  # type: Dict[pathlib.path, QFileIconLoader.LoadResult]
+
+        if useCache:
+            for path in self.__targetPaths:
+                icon = self.__iconsCache.get(path)
+                if icon is None:
+                    continue
+                targetPaths.remove(path)
+                result = QFileIconLoader.LoadResult(path, icon)
+                loadedItems[path] = result
+                self.loaded.emit(result)
+
+        itemsLock = threading.Lock()
+
+        def _load(filePath):
+            # type: (pathlib.Path) -> NoReturn
+            with itemsLock:
+                icon = self.__iconsCache.get(filePath)
+
+            if icon is None:
+                iconProvider = QFileIconProvider()
+
+                posixPath = filePath.as_posix()
+                file = QFileInfo(posixPath)
+                icon = iconProvider.icon(file)
+
+                if icon.isNull():
+                    mimeDb = QMimeDatabase()
+                    for mime in mimeDb.mimeTypesForFileName(posixPath):
+                        icon = QIcon.fromTheme(mime.iconName())
+                        if not icon.isNull():
+                            break
+
+            result = QFileIconLoader.LoadResult(filePath, icon)
+            with itemsLock:
+                loadedItems[filePath] = result
+                self.__iconsCache.set(filePath, icon)
+
+            self.loaded.emit(result)
+
+            if len(loadedItems) == len(targetPaths):
+                self.completed.emit(loadedItems)
+
+        return self.__pool.map_async(
+            _load,
+            targetPaths,
+        )
