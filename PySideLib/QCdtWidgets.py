@@ -275,64 +275,33 @@ class QFlowLayout(QLayout):
         return y + lineHeight - rect.y()
 
 
-TListItem = TypeVar('TListItem', bound=QAbstractListModel)
+TListItem = TypeVar('TListItem', bound=QStandardItemModel)
 
 
-class QListModel(QAbstractListModel, Generic[TListItem]):
+class QCommonItemModel(QStandardItemModel, Generic[TListItem]):
 
     def __init__(self, parent):
         # type: (QObject) -> NoReturn
-        super(QListModel, self).__init__(parent)
-        self.__items = []  # type: List[TListItem]
+        super(QCommonItemModel, self).__init__(parent)
 
-    def append(self, item):
-        # type: (TListItem) -> NoReturn
-        self.beginInsertRows(QModelIndex(), self.rowCount(), self.rowCount() + 1)
-        self.__items.append(item)
-        self.endInsertRows()
-
-    def extend(self, items):
+    def replaceRows(self, items):
         # type: (List[TListItem]) -> NoReturn
-        self.beginInsertRows(QModelIndex(), self.rowCount(), self.rowCount() + len(items))
-        self.__items.extend(items)
-        self.endInsertRows()
-
-    def remove(self, item):
-        # type: (TListItem) -> NoReturn
-        index = self.__items.index(item)
-        self.beginRemoveRows(QModelIndex(), index, index + 1)
-        self.__items.remove(item)
-        self.endRemoveRows()
-
-    def reset(self, items):
-        # type: (List[TListItem]) -> NoReturn
-        self.beginResetModel()
-        self.__items = items.copy()
-        self.endResetModel()
-
-    def clear(self):
-        # type: () -> NoReturn
-        self.reset([])
-
-    def itemFromIndex(self, index):
-        # type: (Union[int, QModelIndex]) -> TListItem
-        if isinstance(index, QModelIndex):
-            index = index.row()
-        if isinstance(index, int):
-            return self.__items[index]
-        raise RuntimeError('the type of "index" must be QModelIndex or int')
-
-    def items(self):
-        # type: () -> List[TListItem]
-        return self.__items
-
-    def rowCount(self, parent=QModelIndex()):
-        # type: (QModelIndex) -> int
-        return len(self.__items)
+        self.clear()
+        self.appendColumn(items)
 
     def refresh(self):
         # type: () -> NoReturn
-        self.dataChanged.emit(self.index(0), self.index(self.rowCount()))
+        self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount(), self.columnCount()))
+
+    def isIndexValid(self, index):
+        # type: (QModelIndex) -> bool
+        if not index.isValid():
+            return False
+        if not 0 <= index.row() < self.rowCount():
+            return False
+        if not 0 <= index.column() < self.columnCount():
+            return False
+        return True
 
 
 class QFlowView(QListView):
@@ -351,9 +320,10 @@ class QFlowDirection(object):
     TopToBottom = 'TopToBottom'
 
 
-class QImageFlowItem(object):
+class QImageFlowItem(QStandardItem):
 
     def __init__(self):
+        super().__init__()
         self.__image = None  # type: Optional[QImage]
 
     def setImage(self, image):
@@ -376,13 +346,13 @@ class QImageFlowView(QFlowView):
 TImageFlowItem = TypeVar('TImageFlowItem', bound=QImageFlowItem)
 
 
-class QImageFlowModel(QListModel, Generic[TImageFlowItem]):
+class QImageFlowModel(QCommonItemModel, Generic[TImageFlowItem]):
 
     def data(self, index, role=Qt.DisplayRole):
         # type: (QModelIndex, int) -> Any
         if role != Qt.DecorationRole:
             return None
-        if not index.isValid() or not 0 <= index.row() < self.rowCount():
+        if not self.isIndexValid(index):
             return None
 
         return self.itemFromIndex(index).image()
@@ -475,7 +445,7 @@ class QImageFlowWidget(_ViewModelWidgetBase, Generic[TImageFlowView, TImageFlowM
         model = self.model()
         if isinstance(model, QAbstractProxyModel):
             model = model.sourceModel()
-        model.append(item)
+        model.appendRow(item)
         return item
 
     def appendImage(self, image):
@@ -715,11 +685,15 @@ class QFileListView(QListView):
             return
 
 
-class QFileListModel(QListModel, Generic[TFileListItem]):
+class QFileListModel(QCommonItemModel, Generic[TFileListItem]):
 
     def __init__(self, parent):
         # type: (QObject) -> NoReturn
         super(QFileListModel, self).__init__(parent)
+
+    def columnCount(self, parent=None):
+        # type: (QModelIndex) -> int
+        return 1
 
     def setDirectoryPath(self, path):
         # type: (Union[str, pathlib.Path]) -> None
@@ -732,7 +706,7 @@ class QFileListModel(QListModel, Generic[TFileListItem]):
         for filePath in [p for p in path.glob('*') if p.is_file()]:
             items.append(self.createItem(filePath))
 
-        self.reset(items)
+        self.replaceRows(items)
 
     def createItem(self, path):
         # type: (pathlib.Path) -> TFileListItem
@@ -740,7 +714,7 @@ class QFileListModel(QListModel, Generic[TFileListItem]):
 
     def data(self, index, role=Qt.DisplayRole):
         # type: (QModelIndex, int) -> Any
-        if not index.isValid() or not 0 <= index.row() < self.rowCount():
+        if not self.isIndexValid(index):
             return None
 
         item = self.itemFromIndex(index)
