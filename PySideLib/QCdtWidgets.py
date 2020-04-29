@@ -360,21 +360,13 @@ class QImageFlowModel(QCommonItemModel, Generic[TImageFlowItem]):
 
 class _ViewModelWidgetBase(QWidget):
 
-    def __init__(self, parent, defaultViewType, defaultModelType):
+    def __init__(self, parent, viewType, modelType):
         # type: (QObject, type, type) -> NoReturn
         super(_ViewModelWidgetBase, self).__init__(parent)
-        self.__defaultViewType = defaultViewType
-        self.__defaultModelType = defaultModelType
+        self.__defaultViewType = viewType
+        self.__defaultModelType = modelType
         self._view = self.viewType()(self)  # type: QAbstractItemView
         self._view.setModel(self.modelType()(self))
-
-    def viewType(self):
-        # type: () -> type
-        return self.__defaultViewType
-
-    def modelType(self):
-        # type: () -> type
-        return self.__defaultModelType
 
     def view(self):
         # type: () -> QAbstractItemView
