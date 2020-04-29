@@ -365,8 +365,8 @@ class _ViewModelWidgetBase(QWidget):
         super(_ViewModelWidgetBase, self).__init__(parent)
         self.__defaultViewType = viewType
         self.__defaultModelType = modelType
-        self._view = self.viewType()(self)  # type: QAbstractItemView
-        self._view.setModel(self.modelType()(self))
+        self._view = viewType(self)  # type: QAbstractItemView
+        self._view.setModel(modelType(self))
 
     def view(self):
         # type: () -> QAbstractItemView
